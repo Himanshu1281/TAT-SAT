@@ -1,0 +1,45 @@
+{
+  "summary": "Aathman backend fully tested via public EXPO_PUBLIC_BACKEND_URL. 28/28 pytest cases pass covering: health, OTP send/verify (dev mode), auth middleware (401 without/invalid token), profile update, meditations list+filter, meditation session logging → stats/streak update, mantra jaap counter, mood check-in + weekly stats, diary CRUD, national rank leaderboard including self, live sessions (satsang/yoga), books list+detail+404, order create with mock_mode=true and MOCKED razorpay verify → paid, guru messages/quote, Q&A create+seeded answers, SOS request, sleep music. Previous-OTP invalidation and wrong-OTP 400 also verified. Note: Razorpay verify and SendGrid are MOCKED as declared.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/send-otp", "issue": "Returns dev_otp in response even in production when SENDGRID_API_KEY is empty (send fails ⇒ dev_otp exposed). Consider gating strictly on OTP_DEV_MODE for production."},
+      {"endpoint": "GET /api/rank", "issue": "For scope='international' code skips filtering (comment says 'all') but earlier 'national' filter still applies only when both users have nationality; users with null nationality would leak into national scope. Minor edge case."},
+      {"endpoint": "PUT /api/profile", "issue": "Uses body.dict() (Pydantic v1 API). If Pydantic v2 is installed, this emits a deprecation warning; prefer body.model_dump(exclude_none=True)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: harden dev_otp exposure so it is only ever returned when OTP_DEV_MODE=true (not when SendGrid send fails silently).",
+    "Optional: migrate body.dict() → body.model_dump() for Pydantic v2 forward-compat.",
+    "Frontend .env exposes EXPO_PUBLIC_BACKEND_URL (correct for Expo). System prompt references EXPO_BACKEND_URL – tests fall back to EXPO_PUBLIC_BACKEND_URL, which is what Expo web actually uses. No action needed unless main agent wants both keys."
+  ],
+  "critical_code_review_comments": [
+    "server.py (~860 lines) is close to the 700-line guideline threshold; consider splitting routers (auth, content, commerce, guru) into modules as the app grows.",
+    "Rank endpoint: 'circle' scope currently returns only the requesting user – acceptable for MVP but should be documented.",
+    "Order.create stores amount in INR (rupees) while razorpay expects paise; fine for MOCK mode but ensure real integration multiplies by 100 (it does)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py (new)",
+    "/app/backend/tests/test_backend.py (new)"
+  ],
+  "success_rate": {"backend": "100% (28/28)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "No manual seed – backend seeds meditations, sleep_content, live_sessions, books, guru_messages, quotes, Q&A on startup. Tests create per-test TEST_-prefixed users/diary/orders which are safe to leave.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend base URL comes from /app/frontend/.env → EXPO_PUBLIC_BACKEND_URL (not EXPO_BACKEND_URL). Use conftest fixture 'user_session' + 'auth_headers' for authenticated tests. Razorpay and SendGrid are MOCKED (no keys). To retest: `pytest /app/backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml`.",
+  "mocked_apis_verified": [
+    "Razorpay verify: /api/orders/create returns mock_mode=true, /api/orders/verify returns ok=true, status=paid without signature",
+    "SendGrid: /api/auth/send-otp returns dev_otp instead of sending email"
+  ]
+}
