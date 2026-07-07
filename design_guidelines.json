@@ -1,0 +1,180 @@
+{
+  "app_name": "Aathman - Awaken Within",
+  "personality": "8 Hand-Drawn / Journal (with Indian aesthetic and Calm-like premium feel)",
+  "personality_one_liner": "A calm, deeply spiritual, and culturally rooted sanctuary that feels like a quiet temple at dawn.",
+  "color": {
+    "surface": "#F7F6F2",
+    "onSurface": "#1A1A1A",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#1A1A1A",
+    "surfaceTertiary": "#ECE8E1",
+    "onSurfaceTertiary": "#1A1A1A",
+    "surfaceInverse": "#101828",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#FFBA3D",
+    "brandPrimary": "#FFBA3D",
+    "onBrandPrimary": "#1A1A1A",
+    "brandSecondary": "#7861FF",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#00BB84",
+    "onBrandTertiary": "#FFFFFF",
+    "success": "#00BB84",
+    "onSuccess": "#FFFFFF",
+    "warning": "#FFBA3D",
+    "onWarning": "#1A1A1A",
+    "error": "#D92D20",
+    "onError": "#FFFFFF",
+    "info": "#7861FF",
+    "onInfo": "#FFFFFF",
+    "border": "#ECE8E1",
+    "borderStrong": "#1A1A1A",
+    "divider": "#ECE8E1"
+  },
+  "typography": {
+    "displayFontFamily": "Cormorant Garamond",
+    "textFontFamily": "Inter",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 24,
+      "2xl": 32
+    }
+  },
+  "spacing": {
+    "rule": "Use strict 8pt grid. Generous breathing room, mimicking a serene temple space.",
+    "xs": 4,
+    "sm": 8,
+    "md": 16,
+    "lg": 24,
+    "xl": 32,
+    "2xl": 40,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 8,
+    "md": 16,
+    "lg": 24,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use glass headers over scrolling content (like meditation lists).",
+      "Use glass bottom tab bar so list content scrolls gracefully beneath.",
+      "Use frosted overlay on hero cards with imagery."
+    ],
+    "dont's": [
+      "Don't use glass on body content or form inputs.",
+      "Don't blur heavily if the background is solid colored."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Home Dashboard",
+      "purpose": "A welcoming center for daily spiritual check-ins, recommendations, and Guru's wisdom.",
+      "states": {
+        "loading": "Centered soft pulsing lotus icon.",
+        "empty": "N/A",
+        "error": "Soft text: 'Take a deep breath. Let's try to reconnect.' with a retry button."
+      },
+      "layout": "Header with 'AATHMAN' logo and SOS floating action button. Top section: Mood check-in emojis. Middle section: Daily Recommendations horizontal scroll. Bottom sections: Message from Guru card (image + text) and Quote of the Day. Use glass header. Safe area top."
+    },
+    {
+      "name": "Meditation Library",
+      "purpose": "Browse and start guided meditations.",
+      "states": {
+        "loading": "Skeleton cards.",
+        "empty": "Illustration of meditating person.",
+        "error": "Error message with retry button."
+      },
+      "layout": "Categorized tabs (All, Sleep, Anxiety, Focus). Grid or list of meditation sessions. Each card has a background image with a vertical gradient scrim, title, and duration. Tapping opens Meditation Detail / Audio Player."
+    },
+    {
+      "name": "Dear Diary",
+      "purpose": "Spiritual Journaling and mood tracking.",
+      "states": {
+        "loading": "Spinner.",
+        "empty": "Illustration of a blank book, 'Start your spiritual journey today'.",
+        "error": "Error message with retry button."
+      },
+      "layout": "Calendar view at top. List of past entries below. FAB to add new entry. Writing screen has mood emoji picker, date, and large text area."
+    },
+    {
+      "name": "My Stats & Rank",
+      "purpose": "Track progress and spiritual streak.",
+      "states": {
+        "loading": "Spinner.",
+        "empty": "N/A",
+        "error": "Error message with retry."
+      },
+      "layout": "Top section: Mantra Jaap Counter (large tap area, haptic feedback). Middle: Stats dashboard (sessions, minutes). Bottom: Rank leaderboard with tabs (Circle, State, National, International)."
+    },
+    {
+      "name": "Live Satsang & Yoga",
+      "purpose": "Join live spiritual and physical wellness sessions.",
+      "states": {
+        "loading": "Spinner.",
+        "empty": "No live sessions right now. View schedule.",
+        "error": "Error message with retry."
+      },
+      "layout": "List of large cards featuring event images, title, time, and 'Join Now' button. Uses image gradient scrims."
+    }
+  ],
+  "images": {
+    "lotus_logo": {
+      "url": "https://images.unsplash.com/photo-1608900203293-ebc770fac3f9",
+      "alt": "Minimal lotus flower"
+    },
+    "meditation_hero": {
+      "url": "https://images.pexels.com/photos/13849283/pexels-photo-13849283.jpeg",
+      "dark": "https://images.pexels.com/photos/10205915/pexels-photo-10205915.jpeg",
+      "alt": "Silhouette of meditating person at sunset"
+    },
+    "guru_portrait": {
+      "url": "https://images.unsplash.com/photo-1543934776-32d1cc654abb",
+      "alt": "Spiritual Indian guru"
+    },
+    "store_books": {
+      "url": "https://images.unsplash.com/photo-1652992386209-afc1f96145f5",
+      "alt": "Spiritual book cover"
+    },
+    "sleep_moon": {
+      "url": "https://images.pexels.com/photos/10255271/pexels-photo-10255271.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Calm night sky moon"
+    },
+    "buddha_statue": {
+      "url": "https://images.unsplash.com/photo-1544592218-b546f7b9ddb4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NjV8MHwxfHNlYXJjaHwyfHxidWRkaGElMjBzdGF0dWUlMjBhZXN0aGV0aWMlMjBtaW5pbWFsfGVufDB8fHx8MTc4MjUwNTg4OHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Minimal Buddha statue"
+    }
+  },
+  "haptics": {
+    "mantra_counter_tap": "impactLight",
+    "mood_selection": "selection",
+    "primary_button_press": "impactMedium",
+    "tab_change": "selection"
+  },
+  "instructions_to_main_agent": [
+    "Ensure the Indian aesthetic is reflected through typography (Cormorant Garamond for displays) and the rich but calm color palette (Saffron, Purple, Teal on warm cream backgrounds).",
+    "Implement the 'Dear Diary' with a calendar view and the mood tracking bar chart (Calm/Happy/Grateful/Anxious) as requested.",
+    "The Mantra Jaap Counter must have a very large, prominent tap area with `haptics.mantra_counter_tap` mapped to it.",
+    "Always use gradient scrims (bottom 30-40% dark) over images (like the meditation thumbnails or live satsang cards) to guarantee text readability.",
+    "Keep the SOS Depression button prominent on the Home screen or globally, potentially as a floating glass card or a sticky footer above the tab bar.",
+    "Do NOT use heavy shadows. Rely on spacing and subtle borders to separate content, matching the calm, airy feel of Headspace/Calm."
+  ]
+}
