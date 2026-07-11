@@ -872,6 +872,17 @@ async def on_startup():
     await db.guru_messages.update_many({"author": "Guruji Sundar"}, {"$set": {"cover": GURUJI_IMAGE}})
     await db.live_sessions.update_many({"host": "Guruji Sundar"}, {"$set": {"cover": GURUJI_IMAGE}})
     await db.meditations.update_many({"title": "Morning Awakening"}, {"$set": {"cover": GURUJI_IMAGE}})
+    # Migrate legacy bell_default values (were in odd small numbers) to seconds-based defaults
+    bell_map = {
+        "Inner Peace Meditation": 300,
+        "Body Scan": 900,
+        "Gratitude Meditation": 0,
+        "Anxiety Relief Breath": 300,
+        "Morning Awakening": 300,
+        "Third Eye Focus": 900,
+    }
+    for title, val in bell_map.items():
+        await db.meditations.update_many({"title": title}, {"$set": {"bell_default": val}})
     logger.info("Aathman API started, data seeded, guruji images synced.")
 
 
