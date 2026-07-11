@@ -67,7 +67,10 @@ export default function SatsangTab() {
                     <Text style={styles.meta}>{new Date(s.start_at).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
                   </View>
                 </View>
-                <Pressable testID={`join-${s.id}`} style={styles.joinBtn} onPress={() => router.push({ pathname: '/live-player', params: { id: s.id, ytid: s.youtube_id, title: s.title } })}>
+                <Pressable testID={`join-${s.id}`} style={styles.joinBtn} onPress={async () => {
+                  try { await api.post('/live/attend', { session_id: s.id }); } catch {}
+                  router.push({ pathname: '/live-player', params: { id: s.id, ytid: s.youtube_id, title: s.title } });
+                }}>
                   <Ionicons name="play" size={14} color={colors.onBrand} />
                   <Text style={styles.joinText}>{s.is_live ? 'Join Live' : 'Watch'}</Text>
                 </Pressable>

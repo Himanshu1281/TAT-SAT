@@ -148,7 +148,8 @@ export default function Home() {
         {/* Explore row */}
         <View style={styles.sectionHeader}><Text style={styles.h2}>Explore</Text></View>
         <View style={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
-          <ExploreCard icon="book" label="Books & Magazines" hint="Wisdom for conscious living" onPress={() => router.push('/books')} testID="explore-books" />
+          <ExploreCard icon="sparkles" label="Aathman Awareness Centre" hint="Courses, wisdom, our community" onPress={() => router.push('/community')} testID="explore-community" />
+          <ExploreCard icon="book" label="Books & Magazines" hint="Brahmatheerth by Guruji Sundar" onPress={() => router.push('/books')} testID="explore-books" />
           <ExploreCard icon="videocam" label="Weekly Satsang" hint="Live with Guruji" onPress={() => router.push('/(tabs)/satsang')} testID="explore-satsang" />
           <ExploreCard icon="help-circle" label="Q & A" hint="Ask the Guru" onPress={() => router.push('/qa')} testID="explore-qa" />
         </View>

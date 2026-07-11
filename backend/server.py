@@ -288,12 +288,39 @@ async def update_profile(body: ProfileUpdate, user: dict = Depends(get_current_u
 
 # ------------ Diary ------------
 @api.get("/diary")
-async def list_diary(user: dict = Depends(get_current_user)):
-    entries = await db.diary.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+async def list_diary(date: Optional[str] = None, user: dict = Depends(get_current_user)):
+    q: dict = {"user_id": user["id"]}
+    if date:
+        q["date"] = date
+    entries = await db.diary.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     for e in entries:
         if isinstance(e.get("created_at"), datetime):
             e["created_at"] = iso(e["created_at"])
     return entries
+
+
+@api.get("/diary/dates")
+async def diary_dates(user: dict = Depends(get_current_user)):
+    """Return list of distinct dates that have diary entries + count per date."""
+    pipeline = [
+        {"$match": {"user_id": user["id"]}},
+        {"$group": {"_id": "$date", "count": {"$sum": 1}}},
+        {"$sort": {"_id": -1}},
+    ]
+    out = []
+    async for r in db.diary.aggregate(pipeline):
+        out.append({"date": r["_id"], "count": int(r["count"])})
+    return out
+
+
+@api.get("/diary/{entry_id}")
+async def get_diary(entry_id: str, user: dict = Depends(get_current_user)):
+    e = await db.diary.find_one({"id": entry_id, "user_id": user["id"]}, {"_id": 0})
+    if not e:
+        raise HTTPException(404, "Not found")
+    if isinstance(e.get("created_at"), datetime):
+        e["created_at"] = iso(e["created_at"])
+    return e
 
 
 @api.post("/diary")
@@ -353,6 +380,39 @@ async def mood_weekly(user: dict = Depends(get_current_user)):
         if m in counts:
             counts[m] += 1
     return {"since": iso(since), "counts": counts, "total": sum(counts.values())}
+
+
+@api.get("/mood/monthly-stats")
+async def mood_monthly(user: dict = Depends(get_current_user)):
+    """Return daily mood counts for the last 30 days."""
+    days = 30
+    since = now_utc() - timedelta(days=days)
+    rows = await db.moods.find({"user_id": user["id"], "created_at": {"$gte": since}}, {"_id": 0}).to_list(2000)
+    # Bucket by date
+    buckets: dict = {}
+    for r in rows:
+        c = r.get("created_at")
+        if isinstance(c, str):
+            try:
+                c = datetime.fromisoformat(c)
+            except Exception:
+                continue
+        d = c.date().isoformat()
+        b = buckets.setdefault(d, {"calm": 0, "happy": 0, "grateful": 0, "anxious": 0, "sad": 0})
+        m = (r.get("mood") or "").lower()
+        if m in b:
+            b[m] += 1
+    # Fill missing days with zero
+    today = now_utc().date()
+    series = []
+    for i in range(days - 1, -1, -1):
+        d = (today - timedelta(days=i)).isoformat()
+        series.append({"date": d, "counts": buckets.get(d, {"calm": 0, "happy": 0, "grateful": 0, "anxious": 0, "sad": 0})})
+    totals = {"calm": 0, "happy": 0, "grateful": 0, "anxious": 0, "sad": 0}
+    for s in series:
+        for k, v in s["counts"].items():
+            totals[k] += v
+    return {"since": iso(since), "days": days, "series": series, "totals": totals}
 
 
 # ------------ Meditation ------------
@@ -428,82 +488,103 @@ async def _mantra_total(user_id: str) -> int:
     return 0
 
 
+# ------------ Points ------------
+POINTS_PER_LIVE = 100
+POINTS_PER_MED_HOUR = 50
+POINTS_PER_108_MALAS = 50  # 108 malas = 108 * 108 chants
+
+
+async def _compute_points(user_id: str) -> dict:
+    """Compute total points and breakdown for a user."""
+    # Live attendances
+    live_attended = await db.live_attend.count_documents({"user_id": user_id})
+    # Meditation minutes
+    total_mins = 0
+    async for row in db.sessions.aggregate([
+        {"$match": {"user_id": user_id}},
+        {"$group": {"_id": None, "m": {"$sum": "$duration_minutes"}}},
+    ]):
+        total_mins = int(row.get("m", 0))
+    # Mantra chants
+    mantra_total = await _mantra_total(user_id)
+    live_pts = live_attended * POINTS_PER_LIVE
+    med_pts = round(total_mins * POINTS_PER_MED_HOUR / 60)
+    mantra_pts = round(mantra_total * POINTS_PER_108_MALAS / (108 * 108))
+    total = live_pts + med_pts + mantra_pts
+    return {
+        "total": int(total),
+        "live_points": int(live_pts),
+        "meditation_points": int(med_pts),
+        "mantra_points": int(mantra_pts),
+        "live_attended": int(live_attended),
+        "total_minutes": int(total_mins),
+        "mantra_count": int(mantra_total),
+    }
+
+
 # ------------ Stats & Rank ------------
 @api.get("/stats/me")
 async def stats_me(user: dict = Depends(get_current_user)):
     sessions = await db.sessions.count_documents({"user_id": user["id"]})
-    pipeline = [
-        {"$match": {"user_id": user["id"]}},
-        {"$group": {"_id": None, "mins": {"$sum": "$duration_minutes"}}},
-    ]
-    total_mins = 0
-    async for row in db.sessions.aggregate(pipeline):
-        total_mins = int(row.get("mins", 0))
-    mantra_total = await _mantra_total(user["id"])
+    pts = await _compute_points(user["id"])
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     return {
         "total_sessions": sessions,
-        "total_minutes": total_mins,
-        "mantra_count": mantra_total,
+        "total_minutes": pts["total_minutes"],
+        "mantra_count": pts["mantra_count"],
         "streak": fresh.get("streak", 0),
+        "points": pts["total"],
+        "live_attended": pts["live_attended"],
+        "breakdown": {
+            "live": pts["live_points"],
+            "meditation": pts["meditation_points"],
+            "mantra": pts["mantra_points"],
+        },
+        "rules": {
+            "live_session": POINTS_PER_LIVE,
+            "meditation_per_hour": POINTS_PER_MED_HOUR,
+            "malas_108": POINTS_PER_108_MALAS,
+        },
     }
 
 
 @api.get("/rank")
 async def rank(scope: str = "national", user: dict = Depends(get_current_user)):
-    # aggregate mins per user
-    pipeline = [
-        {"$group": {"_id": "$user_id", "mins": {"$sum": "$duration_minutes"}}},
-        {"$sort": {"mins": -1}},
-        {"$limit": 100},
-    ]
+    # Gather all users who have any activity + include self
+    user_ids: set = set([user["id"]])
+    async for r in db.sessions.aggregate([{"$group": {"_id": "$user_id"}}]):
+        user_ids.add(r["_id"])
+    async for r in db.mantras.aggregate([{"$group": {"_id": "$user_id"}}]):
+        user_ids.add(r["_id"])
+    async for r in db.live_attend.aggregate([{"$group": {"_id": "$user_id"}}]):
+        user_ids.add(r["_id"])
     rows = []
-    async for r in db.sessions.aggregate(pipeline):
-        rows.append({"user_id": r["_id"], "mins": int(r["mins"])})
-    # attach names + filter by scope
-    result = []
-    for r in rows:
-        u = await db.users.find_one({"id": r["user_id"]}, {"_id": 0})
+    for uid in user_ids:
+        u = await db.users.find_one({"id": uid}, {"_id": 0})
         if not u:
+            continue
+        # Scope filter
+        if scope == "circle" and u["id"] != user["id"]:
             continue
         if scope == "state" and u.get("state") and user.get("state") and u.get("state") != user.get("state"):
             continue
-        if scope == "circle":
-            # simple circle: only self for MVP
-            if u["id"] != user["id"]:
-                continue
         if scope == "national" and u.get("nationality") and user.get("nationality"):
             if u.get("nationality") != user.get("nationality"):
                 continue
-        # international = all
-        result.append({
+        pts = await _compute_points(uid)
+        rows.append({
             "user_id": u["id"],
             "name": u.get("name") or "Seeker",
             "state": u.get("state"),
             "nationality": u.get("nationality"),
             "avatar": u.get("avatar"),
-            "mins": r["mins"],
+            "points": pts["total"],
+            "mins": pts["total_minutes"],
         })
-    # ensure self is in list
-    if not any(x["user_id"] == user["id"] for x in result):
-        my_mins = 0
-        async for row in db.sessions.aggregate([
-            {"$match": {"user_id": user["id"]}},
-            {"$group": {"_id": None, "m": {"$sum": "$duration_minutes"}}}
-        ]):
-            my_mins = int(row.get("m", 0))
-        result.append({
-            "user_id": user["id"],
-            "name": user.get("name") or "Seeker",
-            "state": user.get("state"),
-            "nationality": user.get("nationality"),
-            "avatar": user.get("avatar"),
-            "mins": my_mins,
-        })
-        result.sort(key=lambda x: -x["mins"])
-    for i, r in enumerate(result[:50]):
+    rows.sort(key=lambda x: -x["points"])
+    for i, r in enumerate(rows[:50]):
         r["rank"] = i + 1
-    return {"scope": scope, "leaderboard": result[:50]}
+    return {"scope": scope, "leaderboard": rows[:50]}
 
 
 # ------------ Live Satsang & Yoga ------------
@@ -519,10 +600,36 @@ async def live_sessions(kind: Optional[str] = None):
     return rows
 
 
+class LiveAttendBody(BaseModel):
+    session_id: str
+
+
+@api.post("/live/attend")
+async def live_attend(body: LiveAttendBody, user: dict = Depends(get_current_user)):
+    """Mark a user as attended for a live session. Idempotent per user/session."""
+    existing = await db.live_attend.find_one({"user_id": user["id"], "session_id": body.session_id}, {"_id": 0})
+    if existing:
+        pts = await _compute_points(user["id"])
+        return {"ok": True, "already_attended": True, "points": pts["total"]}
+    session = await db.live_sessions.find_one({"id": body.session_id}, {"_id": 0})
+    if not session:
+        raise HTTPException(404, "Session not found")
+    doc = {
+        "id": new_id(),
+        "user_id": user["id"],
+        "session_id": body.session_id,
+        "session_title": session.get("title"),
+        "created_at": now_utc(),
+    }
+    await db.live_attend.insert_one(doc.copy())
+    pts = await _compute_points(user["id"])
+    return {"ok": True, "awarded_points": POINTS_PER_LIVE, "points": pts["total"]}
+
+
 # ------------ Books ------------
 @api.get("/books")
 async def list_books():
-    rows = await db.books.find({}, {"_id": 0}).to_list(200)
+    rows = await db.books.find({}, {"_id": 0}).sort("order", 1).to_list(200)
     return rows
 
 
@@ -700,6 +807,91 @@ async def list_music():
     return rows
 
 
+# ------------ Community (Aathman Awareness Centre) ------------
+@api.get("/community/info")
+async def community_info():
+    """Info about Aathman Awareness Centre and Guruji Sundar's teachings.
+    Sourced from https://www.aathmanawarenesscentre.com/ and https://gurujisundar.com/"""
+    return {
+        "name": "Aathman Awareness Centre",
+        "founder": "HH Guruji Sundar",
+        "tagline": "A sanctuary for seekers of truth to venture on the path of self-realisation.",
+        "quote": "Every living being is qualified to get enlightened. It is their birthright.",
+        "quote_author": "HH Guruji Sundar",
+        "guru_quote": "'I' ceased to exist long time ago. Only 'He' dwells in my body. 'I' exists only as a namesake.",
+        "about": "At Aathman Awareness Centre (AAC), we are dedicated to guiding individuals on the path of self-realisation under the direct guidance of His Holiness Guruji Sundar. We help seekers from all walks of life discover their true selves through techniques ranging from Chakra Meditation to Awareness About Atman.",
+        "hero_image": "https://static.wixstatic.com/media/82dd0e_1c4089b01f1848a397079660959c5249~mv2.jpg/v1/fill/w_953,h_683,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/82dd0e_1c4089b01f1848a397079660959c5249~mv2.jpg",
+        "guru_image": GURUJI_IMAGE,
+        "website": "https://www.aathmanawarenesscentre.com/",
+        "shop": "https://gurujisundar.com/shop/",
+        "courses": [
+            {
+                "id": "bky",
+                "title": "Basic Kundalini Yoga (BKY)",
+                "description": "Learn the art of balancing the Kundalini energy in your body.",
+                "cover": "https://static.wixstatic.com/media/nsplsh_a68ac7432d6c45c7a59274d20431bd24~mv2.jpg/v1/fill/w_400,h_400,fp_0.50_0.50,q_80,usm_0.66_1.00_0.01,enc_auto/nsplsh_a68ac7432d6c45c7a59274d20431bd24~mv2.jpg",
+                "url": "https://www.aathmanawarenesscentre.com/service-page/basic-kundalini-yoga-bky",
+            },
+            {
+                "id": "dky",
+                "title": "Dynamic Kundalini Yoga (DKY)",
+                "description": "Explore the life within the chakras.",
+                "cover": "https://static.wixstatic.com/media/nsplsh_df0ffbb9feca40e4a824a8b34bac1c69~mv2.jpg/v1/fill/w_400,h_400,fp_0.50_0.50,q_80,usm_0.66_1.00_0.01,enc_auto/nsplsh_df0ffbb9feca40e4a824a8b34bac1c69~mv2.jpg",
+                "url": "https://www.aathmanawarenesscentre.com/service-page/dynamic-kundalini-yoga-dky",
+            },
+            {
+                "id": "iky",
+                "title": "Intensified Kundalini Yoga (IKY)",
+                "description": "Unravel the wisdom of chakras and know your 'Real Home'.",
+                "cover": "https://static.wixstatic.com/media/nsplsh_7566747146626657474659~mv2_d_3483_4354_s_4_2.jpg/v1/fill/w_400,h_400,fp_0.50_0.50,q_80,usm_0.66_1.00_0.01,enc_auto/nsplsh_7566747146626657474659~mv2_d_3483_4354_s_4_2.jpg",
+                "url": "https://www.aathmanawarenesscentre.com/service-page/intensified-kundalini-yoga-iky",
+            },
+            {
+                "id": "chakra-breathing",
+                "title": "Chakra Breathing",
+                "description": "Master conscious breathing techniques through the chakras.",
+                "cover": "https://static.wixstatic.com/media/nsplsh_333842684858304d43364d~mv2_d_5184_3456_s_4_2.jpg/v1/fill/w_400,h_400,fp_0.50_0.50,q_80,usm_0.66_1.00_0.01,enc_auto/nsplsh_333842684858304d43364d~mv2_d_5184_3456_s_4_2.jpg",
+                "url": "https://www.aathmanawarenesscentre.com/service-page/chakra-breathing",
+            },
+        ],
+        "articles": [
+            {
+                "title": "Beyond The Seven: Discovering the Hidden Chakras",
+                "excerpt": "Only through the grace of HH Guruji Sundar have these hidden chakras been revealed: Pidari Kan (Mane) and Manonmaniyam.",
+                "cover": "https://static.wixstatic.com/media/82dd0e_9795acf08f254e05bc09b27fe52f9bd3~mv2.png/v1/fill/w_600,h_600,fp_0.50_0.50,q_95,enc_avif,quality_auto/82dd0e_9795acf08f254e05bc09b27fe52f9bd3~mv2.webp",
+                "url": "https://www.aathmanawarenesscentre.com/post/what-is-the-nine-chakra-system-hidden-chakras-revealed",
+            },
+            {
+                "title": "Staying in the Middle",
+                "excerpt": "You can never ever stay in the middle. Only fools claim to function from the middle.",
+                "cover": "https://static.wixstatic.com/media/nsplsh_67373737228544e88831f0762abb42e3~mv2.jpg/v1/fill/w_600,h_600,fp_0.50_0.50,q_90,enc_avif,quality_auto/nsplsh_67373737228544e88831f0762abb42e3~mv2.webp",
+                "url": "https://www.aathmanawarenesscentre.com/post/staying-in-the-middle",
+            },
+            {
+                "title": "The Art of Living Full Day in Awareness",
+                "excerpt": "HH Guruji Sundar shares his divine wisdom on how to live in awareness the entire day.",
+                "cover": "https://static.wixstatic.com/media/82dd0e_aa4d6bbfafd94cdfbf7689a5d001012e~mv2.jpeg/v1/fill/w_600,h_600,fp_0.50_0.50,q_90,enc_avif,quality_auto/82dd0e_aa4d6bbfafd94cdfbf7689a5d001012e~mv2.webp",
+                "url": "https://www.aathmanawarenesscentre.com/post/the-art-of-living-full-day-in-awareness",
+            },
+        ],
+        "socials": [
+            {"platform": "Instagram", "url": "https://www.instagram.com/aathmanawarenesscentre"},
+            {"platform": "Facebook", "url": "https://www.facebook.com/profile.php?id=100067466078286"},
+            {"platform": "WhatsApp", "url": "https://whatsapp.com/channel/0029VaGgAh57tkj8zdcA8o03"},
+            {"platform": "YouTube", "url": "https://www.youtube.com/c/aathmanawarenesscentre"},
+            {"platform": "LinkedIn", "url": "https://www.linkedin.com/company/aathman-awareness-centre-aac/"},
+            {"platform": "Reddit", "url": "https://www.reddit.com/r/AatmanAwarenessCentre/"},
+            {"platform": "Amazon", "url": "https://www.amazon.in/Kindle-Store-Guruji-Sundar/s?rh=n%3A1571277031%2Cp_27%3AGuruji%2BSundar"},
+        ],
+        "testimonials": [
+            {"name": "Sudharsun Kannan",
+             "text": "Whatever I know in meditation today or spirituality today is only because of His Holiness. Just merely being with Him is the miracle."},
+            {"name": "Rajagopalan KS",
+             "text": "I can find no words to match his divinity, love, grace, compassion. Come and dissolve yourselves in our beloved HH to find the real You."},
+        ],
+    }
+
+
 # ------------ Root ------------
 @api.get("/")
 async def root():
@@ -795,29 +987,54 @@ async def seed_data():
              "cover": "https://images.pexels.com/photos/10255271/pexels-photo-10255271.jpeg",
              "youtube_id": "COp7BR_Dvps", "is_live": False},
         ])
-    # Books
-    if await db.books.count_documents({}) == 0:
+    # Books - real Brahmatheerth magazine issues from gurujisundar.com/shop
+    BRAHMATHEERTH = [
+        ("Brahmatheerth Issue 1 – BRAHMAM",
+         "https://i0.wp.com/gurujisundar.com/wp-content/uploads/2025/02/BRAHMATHEERTH-FEB-25-ISSUE-1.jpg",
+         "https://gurujisundar.com/product/brahmatheerth-issue1-brahmam/"),
+        ("Brahmatheerth Issue 2 – BRAHMAM PERSONIFIED",
+         "https://i0.wp.com/gurujisundar.com/wp-content/uploads/2025/02/Brahmatheerth-FEB-25-Issue-2.jpg",
+         "https://gurujisundar.com/product/brahmatheerth-issue-2-brahmam-personified/"),
+        ("Brahmatheerth Issue 3 – THE MAKING OF A YOGI",
+         "https://i0.wp.com/gurujisundar.com/wp-content/uploads/2025/02/Brahmatheerth-feb-28-1.jpg",
+         "https://gurujisundar.com/product/brahmatheerth-issue-3-the-making-of-a-yogi/"),
+        ("Brahmatheerth Issue 4 – DREAM WORLD",
+         "https://i0.wp.com/gurujisundar.com/wp-content/uploads/2025/03/Brahma-theerth-issue-4.jpg",
+         "https://gurujisundar.com/product/brahmatheerth-issue-4-dream-world/"),
+        ("Brahmatheerth Issue 5 – DEMYSTIFYING THE MIND",
+         "https://i0.wp.com/gurujisundar.com/wp-content/uploads/2025/03/Brahmatheerth-Issue-5-March-14-2025.jpg",
+         "https://gurujisundar.com/product/brahmatheerth-issue-5-demystifying-the-mind/"),
+        ("Brahmatheerth Issue 6 – TOPOGRAPHY OF THE MIND",
+         "https://i0.wp.com/gurujisundar.com/wp-content/uploads/2025/03/Brahmatheerth-Issue-6-March-21-1.jpg",
+         "https://gurujisundar.com/product/brahmatheerth-issue-6-topography-of-the-mind/"),
+        ("Brahmatheerth Issue 7 – SISHYAHOOD REDEFINED",
+         "https://i0.wp.com/gurujisundar.com/wp-content/uploads/2025/03/Brahmatheerth-March-Issue-7.jpg",
+         "https://gurujisundar.com/product/brahmatheerth-issue-7-sishyahood-redefined/"),
+        ("Brahmatheerth Issue 8 – DHYAN SIMPLIFIED",
+         "https://i0.wp.com/gurujisundar.com/wp-content/uploads/2025/04/Cover-Page-Final.jpg",
+         "https://gurujisundar.com/product/brahmatheerth-issue-8-dhyan-simplified/"),
+        ("Brahmatheerth Issue 9 – BAKTHI UNRAVELLED (Special Edition)",
+         "https://i0.wp.com/gurujisundar.com/wp-content/uploads/2025/05/Front-Cover.jpg",
+         "https://gurujisundar.com/product/brahmatheerth-issue-9-bakthi-unravelled-special-edition/"),
+    ]
+    # Ensure books collection matches the shop exactly (reseed if titles do not match)
+    existing_titles = {b["title"] async for b in db.books.find({}, {"title": 1, "_id": 0})}
+    desired_titles = {t for t, _, _ in BRAHMATHEERTH}
+    if existing_titles != desired_titles:
+        await db.books.delete_many({})
         await db.books.insert_many([
-            {"id": new_id(), "title": "The Power of Now", "author": "Guruji Sundar",
-             "price": 599, "currency": "INR", "rating": 4.8,
-             "cover": "https://images.unsplash.com/photo-1652992386209-afc1f96145f5",
-             "description": "A guide to spiritual enlightenment and living in the present moment.",
-             "kind": "book"},
-            {"id": new_id(), "title": "Autobiography of a Yogi", "author": "Paramahansa Yogananda",
-             "price": 499, "currency": "INR", "rating": 4.9,
-             "cover": "https://images.unsplash.com/photo-1543934776-32d1cc654abb",
-             "description": "A classic spiritual autobiography.",
-             "kind": "book"},
-            {"id": new_id(), "title": "Wisdom for Conscious Living", "author": "Guruji Sundar",
-             "price": 449, "currency": "INR", "rating": 4.7,
-             "cover": "https://images.unsplash.com/photo-1608900203293-ebc770fac3f9",
-             "description": "Daily wisdom for the modern seeker.",
-             "kind": "book"},
-            {"id": new_id(), "title": "Aathman Monthly - May", "author": "Aathman Editorial",
-             "price": 199, "currency": "INR", "rating": 4.5,
-             "cover": "https://images.pexels.com/photos/13849283/pexels-photo-13849283.jpeg",
-             "description": "Monthly magazine of Aathman Awareness Center.",
-             "kind": "magazine"},
+            {
+                "id": new_id(),
+                "title": t,
+                "author": "HH Guruji Sundar",
+                "price": 500, "currency": "INR", "rating": 4.9,
+                "cover": c,
+                "description": "Saint Sundar's Elixir of Divine Wisdom — a spontaneous outpouring of wisdom from the beyond. Published by Aathman Awareness Centre.",
+                "kind": "magazine",
+                "external_url": u,
+                "order": i + 1,
+            }
+            for i, (t, c, u) in enumerate(BRAHMATHEERTH)
         ])
     # Guru messages
     if await db.guru_messages.count_documents({}) == 0:

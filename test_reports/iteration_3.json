@@ -1,0 +1,53 @@
+{
+  "summary": "Backend-only iteration 3. 50/50 pytest cases pass against public EXPO_PUBLIC_BACKEND_URL (37 regression + 13 new). Verified: (1) /api/stats/me returns points, live_attended, breakdown{live,meditation,mantra}, rules — fresh user starts at 0. (2) Points math: 60-min meditation → breakdown.meditation=50; 120-min → 100; 108 chants → mantra=0 (round(108*50/11664)=0); 11664 chants → mantra=50. (3) /api/live/attend awards 100 first call (awarded_points=100), second call returns already_attended=true with no extra points; stats reflect live_attended=1, points=100; unknown session → 404. (4) /api/rank sorts leaderboard by points desc, every row has points+mins, self included in every scope (national/international/state/circle). (5) /api/mood/monthly-stats returns days=30, series length=30 with per-day counts{calm,happy,grateful,anxious,sad}; totals equal sum of series. (6) /api/diary auto-assigns today's date; ?date=YYYY-MM-DD filters correctly; /api/diary/dates returns [{date,count}]; /api/diary/{id} returns entry; unknown id → 404. (7) /api/books rewritten to 9 Brahmatheerth issues sorted by order asc, all price=500, author='HH Guruji Sundar', kind='magazine', external_url pointing to gurujisundar.com/product/. (8) /api/community/info returns name='Aathman Awareness Centre', founder, tagline, quote, guru_quote, about, hero_image, guru_image (customer-assets Guruji URL), website, shop, courses(4), articles(3), socials(7), testimonials(2). Regression suite (auth/OTP, profile, meditations, mantra, mood weekly, diary CRUD, live sessions list, books+orders MOCKED razorpay, guru messages/quote, QA, SOS, sleep, music, guruji-image migration) all still green. MOCKED integrations verified: Razorpay verify auto-succeeds, SendGrid replaced by dev_otp.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "server.py structure", "issue": "GURUJI_IMAGE constant is defined on line 901 — AFTER community_info() (line 812) references it. Works at runtime because the function body is evaluated on call and the module finishes loading before the first request, but it is fragile / a lint red flag. Move the constant to the top of the file with the other config constants."},
+      {"endpoint": "GET /api/rank scope=state|international", "issue": "Scope filters are best-effort: 'international' has no filter (returns same as 'national' when nationalities match), and 'state' silently skips users with no state set. Fresh users default nationality='India' but state=None → will always match national. Consider explicit semantics: international=other nationalities, state=same-state-only excluding NULL, circle=followed friends."},
+      {"endpoint": "GET /api/rank", "issue": "Iterates all users with activity + N+1 _compute_points (each does 3 aggregations). At scale this will be slow. Consider a single aggregation pipeline or cached points on the user doc."},
+      {"endpoint": "POST /api/live/attend", "issue": "Idempotent by (user_id, session_id) but there is no unique index on {user_id, session_id} in db.live_attend. A rapid double-tap could race and insert two docs (double points). Add a compound unique index."},
+      {"endpoint": "POST /api/auth/send-otp", "issue": "(Carried) dev_otp is returned whenever SendGrid send fails, not strictly when OTP_DEV_MODE=true. Gate on OTP_DEV_MODE only for production safety."},
+      {"endpoint": "PUT /api/profile", "issue": "(Carried) Uses Pydantic v1 body.dict(); migrate to body.model_dump(exclude_none=True) for Pydantic v2."},
+      {"endpoint": "GET /api/meditations", "issue": "(Carried) bell_default migration in on_startup now exists but only writes fixed values regardless of existing DB — safe but silently overwrites any admin edits."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/backend/tests/test_iteration3.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Move GURUJI_IMAGE constant to the top of server.py (currently defined after it is used in /api/community/info — works today but is a forward-reference smell).",
+    "Add unique compound index on db.live_attend {user_id: 1, session_id: 1} to hard-guarantee idempotency on race conditions.",
+    "Clarify /api/rank scope semantics: today international == national when both have nationality='India'; 'state' silently drops NULL-state users. Recommend explicit branching and documented rules.",
+    "Consider caching or single-pipeline computation for /api/rank — currently N+1 aggregations across all active users.",
+    "Optional: gate dev_otp response strictly on OTP_DEV_MODE=true; migrate body.dict() → body.model_dump() for Pydantic v2."
+  ],
+  "critical_code_review_comments": [
+    "server.py has grown to 1120 lines — well past the 700-line guideline. Split into routers (auth, points/stats, content, commerce, guru, community).",
+    "_compute_points is O(N * 3 aggregations) inside /api/rank — pull once via a single $facet aggregation, or denormalize points onto users doc updated on each write.",
+    "Forward-reference bug risk: GURUJI_IMAGE used at line 824 but defined at line 901. Only works because request-time evaluation runs after module load. Move it up.",
+    "No compound index on db.live_attend — idempotency relies on find_one race window.",
+    "community_info returns a large hard-coded dict inside the route handler; move to a module-level constant or JSON file for readability + easier updates."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration3.py (new — 13 tests for points, live/attend, rank-by-points, monthly-stats, diary-by-date, Brahmatheerth books, community/info)"
+  ],
+  "success_rate": {"backend": "100% (50/50)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "No manual seed. Server seeds meditations, music, sleep_content, live_sessions, guru_messages, quotes, Q&A on startup. Books collection is force-reseeded when existing titles don't match the 9 Brahmatheerth issue titles (drop+insert) — so previous test books are correctly replaced. Test users created per-test with TEST_ prefix for isolation.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Base URL from /app/frontend/.env → EXPO_PUBLIC_BACKEND_URL (fallback EXPO_BACKEND_URL). Run: pytest /app/backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml. Fixtures user_session/auth_headers in conftest.py handle OTP login. Iteration3 tests use their own per-test _fresh_user() helper to isolate points arithmetic. Razorpay + SendGrid remain MOCKED (OTP_DEV_MODE=true; verify auto-passes when signature missing). Points formulas: live=100/attendance, meditation=round(mins*50/60), mantra=round(chants*50/(108*108)).",
+  "mocked_apis_verified": [
+    "Razorpay: /api/orders/create returns mock_mode=true; /api/orders/verify returns ok=true,status=paid without any signature",
+    "SendGrid: /api/auth/send-otp returns dev_otp in response body (OTP_DEV_MODE=true and no API key)"
+  ]
+}

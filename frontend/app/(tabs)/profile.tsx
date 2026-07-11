@@ -51,6 +51,7 @@ export default function ProfileTab() {
         {/* Navigation */}
         <View style={styles.menu}>
           <MenuItem icon="stats-chart-outline" label="My Stats & Rank" onPress={() => router.push('/stats')} testID="menu-stats" />
+          <MenuItem icon="sparkles-outline" label="Aathman Awareness Centre" onPress={() => router.push('/community')} testID="menu-community" />
           <MenuItem icon="hand-left-outline" label="Mantra Jaap" onPress={() => router.push('/mantra')} testID="menu-mantra" />
           <MenuItem icon="moon-outline" label="Sleep" onPress={() => router.push('/sleep')} testID="menu-sleep" />
           <MenuItem icon="book-outline" label="Books & Magazines" onPress={() => router.push('/books')} testID="menu-books" />
