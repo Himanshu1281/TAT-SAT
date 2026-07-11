@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView, RefreshControl } from 'r
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { api } from '@/src/api/client';
@@ -62,7 +62,7 @@ export default function Home() {
         <View style={styles.header}>
           <View>
             <Text style={styles.greetingSm}>Namaste,</Text>
-            <Text style={styles.greeting}>{first} 🪔</Text>
+            <Text style={styles.greeting}>{first}</Text>
           </View>
           <Pressable testID="sos-fab" style={styles.sosBtn} onPress={() => router.push('/sos')}>
             <Ionicons name="alert-circle" size={16} color="#fff" />
@@ -95,10 +95,10 @@ export default function Home() {
 
         {/* Quick actions */}
         <View style={styles.actionsRow}>
-          <QuickAction icon="timer-outline" label="Meditate" onPress={() => router.push('/meditation-player')} testID="qa-meditate" />
-          <QuickAction icon="hand-left-outline" label="Mantra" onPress={() => router.push('/mantra')} testID="qa-mantra" />
-          <QuickAction icon="moon-outline" label="Sleep" onPress={() => router.push('/sleep')} testID="qa-sleep" />
-          <QuickAction icon="stats-chart-outline" label="Stats" onPress={() => router.push('/stats')} testID="qa-stats" />
+          <QuickAction icon="meditation" family="mci" label="Meditate" onPress={() => router.push('/meditation-player')} testID="qa-meditate" />
+          <QuickAction icon="hand-left-outline" family="ion" label="Mantra" onPress={() => router.push('/mantra')} testID="qa-mantra" />
+          <QuickAction icon="moon-outline" family="ion" label="Sleep" onPress={() => router.push('/sleep')} testID="qa-sleep" />
+          <QuickAction icon="stats-chart-outline" family="ion" label="Stats" onPress={() => router.push('/stats')} testID="qa-stats" />
         </View>
 
         {/* Daily recommendations */}
@@ -157,10 +157,16 @@ export default function Home() {
   );
 }
 
-function QuickAction({ icon, label, onPress, testID }: { icon: any; label: string; onPress: () => void; testID: string }) {
+function QuickAction({ icon, family = 'ion', label, onPress, testID }: { icon: any; family?: 'ion' | 'mci'; label: string; onPress: () => void; testID: string }) {
   return (
     <Pressable testID={testID} onPress={onPress} style={styles.qa}>
-      <View style={styles.qaIcon}><Ionicons name={icon} size={22} color={colors.onSurface} /></View>
+      <View style={styles.qaIcon}>
+        {family === 'mci' ? (
+          <MaterialCommunityIcons name={icon} size={24} color={colors.onSurface} />
+        ) : (
+          <Ionicons name={icon} size={22} color={colors.onSurface} />
+        )}
+      </View>
       <Text style={styles.qaLabel}>{label}</Text>
     </Pressable>
   );

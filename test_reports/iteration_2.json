@@ -1,0 +1,44 @@
+{
+  "summary": "Backend-only iteration 2 test run. 37/37 pytest cases pass against public EXPO_PUBLIC_BACKEND_URL. Verified new /api/music endpoint (returns 10 tracks, all with id/title/url/cover/order and correctly ordered) and the Guruji image migration on startup: every guru_messages doc, every satsang session hosted by 'Guruji Sundar', and the 'Morning Awakening' meditation now use the new customer-assets Guruji image URL. Yoga sessions correctly retained their original covers (not overwritten). All existing 28 tests (auth OTP flow, profile, meditations, mantra, mood, diary CRUD, rank, live sessions, books+orders create/verify (MOCKED razorpay), guru messages/quote, Q&A, SOS, sleep content) still pass. MOCKED integrations: Razorpay verify auto-succeeds, SendGrid replaced by dev_otp.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/meditations", "issue": "Review stated meditation bell_default values were changed to seconds (0, 300, 900) but persisted DB still has old values [60, 90, 60, 45, 60, 120]. Seed only inserts when collection empty and NO startup migration exists for bell_default (unlike the cover-image migration). Fresh deploys will get new values; existing DBs (like this one) remain on old numbers. Priority: LOW-MED."},
+      {"endpoint": "POST /api/auth/send-otp", "issue": "(Carried from iter1) dev_otp is returned whenever SendGrid send fails, not only when OTP_DEV_MODE=true. Gate strictly on OTP_DEV_MODE for production safety."},
+      {"endpoint": "PUT /api/profile", "issue": "(Carried from iter1) Uses Pydantic v1 body.dict(); migrate to body.model_dump(exclude_none=True) for Pydantic v2."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Add a startup migration for meditation bell_default (mirroring the cover-image migration) or use replace_one/upsert on seed so existing DBs get the new second-based values (0, 300, 900). Example: db.meditations.update_many({title:'Anxiety Relief Breath'}, {'$set':{'bell_default':300}}) etc.",
+    "Optional: gate dev_otp response strictly on OTP_DEV_MODE=true.",
+    "Optional: switch body.dict() → body.model_dump() for Pydantic v2."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~890 lines – past the 700-line guideline. Consider splitting into routers (auth, content, commerce, guru, media) as the surface area grows.",
+    "Seed pattern is idempotent-on-empty only. Any future data-shape change (like bell_default seconds, cover URLs) will require a matching update_many migration in on_startup – the guruji-image migration is a good pattern to follow.",
+    "Music seed uses only 2-3 real audio URLs shared across 10 tracks (OCEAN/RAIN/BOWL reused). Functional for MVP but users will hear duplicates – consider distinct sources long-term."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_backend.py (added TestMusic + TestGurujiImageMigration – 9 new tests, total 37)"
+  ],
+  "success_rate": {"backend": "100% (37/37)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "No manual seed – server seeds meditations, music (new), sleep_content, live_sessions, books, guru_messages, quotes, Q&A on startup; migration on_startup force-updates covers for guru_messages, satsang live_sessions, and Morning Awakening meditation to the new Guruji image. Test users created per-run with TEST_ prefix.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Base URL = /app/frontend/.env → EXPO_PUBLIC_BACKEND_URL. Run: pytest /app/backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml. Fixtures user_session/auth_headers in conftest.py handle OTP login. Razorpay + SendGrid MOCKED. GURUJI_IMAGE constant is duplicated inside test_backend.py to keep test literal traceability.",
+  "mocked_apis_verified": [
+    "Razorpay: /api/orders/create returns mock_mode=true; /api/orders/verify returns ok=true,status=paid without any signature",
+    "SendGrid: /api/auth/send-otp returns dev_otp in response body (OTP_DEV_MODE=true and no API key)"
+  ]
+}

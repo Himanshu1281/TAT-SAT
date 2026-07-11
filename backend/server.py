@@ -693,11 +693,20 @@ async def sos_request(body: SOSBody, user: dict = Depends(get_current_user)):
     return {"ok": True, "message": "Our teacher will call you within 30 minutes. You are not alone.", "request": doc}
 
 
+# ------------ Music ------------
+@api.get("/music")
+async def list_music():
+    rows = await db.music.find({}, {"_id": 0}).sort("order", 1).to_list(50)
+    return rows
+
+
 # ------------ Root ------------
 @api.get("/")
 async def root():
     return {"message": "Aathman API is awake", "time": iso(now_utc())}
 
+
+GURUJI_IMAGE = "https://customer-assets.emergentagent.com/job_mantra-connect-3/artifacts/y2tp1enp_GurujiSundar.jpeg"
 
 # ------------ Seed ------------
 async def seed_data():
@@ -709,19 +718,37 @@ async def seed_data():
              "description": "A gentle practice to calm your mind and connect within.", "bell_default": 60},
             {"id": new_id(), "title": "Body Scan", "duration_minutes": 15, "category": "sleep",
              "cover": "https://images.unsplash.com/photo-1544592218-b546f7b9ddb4",
-             "description": "Release tension from head to toe.", "bell_default": 90},
+             "description": "Release tension from head to toe.", "bell_default": 900},
             {"id": new_id(), "title": "Gratitude Meditation", "duration_minutes": 8, "category": "focus",
              "cover": "https://images.pexels.com/photos/10205915/pexels-photo-10205915.jpeg",
-             "description": "Cultivate a heart of gratitude.", "bell_default": 60},
+             "description": "Cultivate a heart of gratitude.", "bell_default": 0},
             {"id": new_id(), "title": "Anxiety Relief Breath", "duration_minutes": 12, "category": "anxiety",
              "cover": "https://images.unsplash.com/photo-1608900203293-ebc770fac3f9",
-             "description": "Calm the storm within.", "bell_default": 45},
+             "description": "Calm the storm within.", "bell_default": 300},
             {"id": new_id(), "title": "Morning Awakening", "duration_minutes": 10, "category": "focus",
-             "cover": "https://images.unsplash.com/photo-1543934776-32d1cc654abb",
-             "description": "Start your day with clarity.", "bell_default": 60},
+             "cover": GURUJI_IMAGE,
+             "description": "Start your day with clarity.", "bell_default": 300},
             {"id": new_id(), "title": "Third Eye Focus", "duration_minutes": 20, "category": "focus",
              "cover": "https://images.pexels.com/photos/10255271/pexels-photo-10255271.jpeg",
-             "description": "Deep concentration practice.", "bell_default": 120},
+             "description": "Deep concentration practice.", "bell_default": 900},
+        ])
+    # Music library
+    if await db.music.count_documents({}) == 0:
+        # Working royalty-free/CC0 sources
+        OCEAN = "https://actions.google.com/sounds/v1/water/waves_crashing_on_rock_beach.ogg"
+        RAIN = "https://actions.google.com/sounds/v1/weather/light_rain.ogg"
+        BOWL = "https://cdn.freesound.org/previews/415/415209_5121236-hq.mp3"
+        await db.music.insert_many([
+            {"id": new_id(), "title": "Himalayan Singing Bowls", "url": BOWL, "cover": "https://images.unsplash.com/photo-1544924406-c8a4b1d8b0be", "order": 1},
+            {"id": new_id(), "title": "Om Drone", "url": BOWL, "cover": "https://images.unsplash.com/photo-1519681393784-d120267933ba", "order": 2},
+            {"id": new_id(), "title": "Temple Bells Ambient", "url": BOWL, "cover": "https://images.unsplash.com/photo-1608900203293-ebc770fac3f9", "order": 3},
+            {"id": new_id(), "title": "Tibetan Bowls", "url": BOWL, "cover": "https://images.unsplash.com/photo-1544592218-b546f7b9ddb4", "order": 4},
+            {"id": new_id(), "title": "River & Birds", "url": RAIN, "cover": "https://images.pexels.com/photos/10205915/pexels-photo-10205915.jpeg", "order": 5},
+            {"id": new_id(), "title": "Rain Meditation", "url": RAIN, "cover": "https://images.pexels.com/photos/13849283/pexels-photo-13849283.jpeg", "order": 6},
+            {"id": new_id(), "title": "Deep Space Meditation", "url": OCEAN, "cover": "https://images.pexels.com/photos/10255271/pexels-photo-10255271.jpeg", "order": 7},
+            {"id": new_id(), "title": "Wind Chimes", "url": BOWL, "cover": "https://images.unsplash.com/photo-1543934776-32d1cc654abb", "order": 8},
+            {"id": new_id(), "title": "Forest Ambience", "url": RAIN, "cover": "https://images.pexels.com/photos/10205915/pexels-photo-10205915.jpeg", "order": 9},
+            {"id": new_id(), "title": "Ocean Waves", "url": OCEAN, "cover": "https://images.pexels.com/photos/13849283/pexels-photo-13849283.jpeg", "order": 10},
         ])
     # Sleep content
     if await db.sleep_content.count_documents({}) == 0:
@@ -750,12 +777,12 @@ async def seed_data():
             {"id": new_id(), "kind": "satsang", "title": "Weekly Satsang with Guruji",
              "description": "The Power of Silence — a live discourse.", "host": "Guruji Sundar",
              "start_at": base + timedelta(days=1, hours=2),
-             "cover": "https://images.unsplash.com/photo-1543934776-32d1cc654abb",
+             "cover": GURUJI_IMAGE,
              "youtube_id": "5qap5aO4i9A", "is_live": True},
             {"id": new_id(), "kind": "satsang", "title": "Living in Awareness",
              "description": "Weekly discourse on presence.", "host": "Guruji Sundar",
              "start_at": base + timedelta(days=8),
-             "cover": "https://images.pexels.com/photos/13849283/pexels-photo-13849283.jpeg",
+             "cover": GURUJI_IMAGE,
              "youtube_id": "jfKfPfyJRdk", "is_live": False},
             {"id": new_id(), "kind": "yoga", "title": "Morning Yoga Flow",
              "description": "Find balance in body and mind.", "host": "Yogini Radha",
@@ -799,17 +826,17 @@ async def seed_data():
             {"id": new_id(), "title": "You are not your thoughts",
              "body": "Remember, you are not your thoughts. You are the awareness behind them. Rest in that.",
              "author": "Guruji Sundar",
-             "cover": "https://images.unsplash.com/photo-1543934776-32d1cc654abb",
+             "cover": GURUJI_IMAGE,
              "published_at": base - timedelta(days=1)},
             {"id": new_id(), "title": "The path of silence",
              "body": "In silence, the noise of the world falls away and truth begins to speak.",
              "author": "Guruji Sundar",
-             "cover": "https://images.pexels.com/photos/10255271/pexels-photo-10255271.jpeg",
+             "cover": GURUJI_IMAGE,
              "published_at": base - timedelta(days=3)},
             {"id": new_id(), "title": "Devotion is remembrance",
              "body": "To love the divine is to remember it in every breath.",
              "author": "Guruji Sundar",
-             "cover": "https://images.unsplash.com/photo-1608900203293-ebc770fac3f9",
+             "cover": GURUJI_IMAGE,
              "published_at": base - timedelta(days=6)},
         ])
     # Quotes
@@ -841,7 +868,11 @@ async def seed_data():
 @app.on_event("startup")
 async def on_startup():
     await seed_data()
-    logger.info("Aathman API started, data seeded.")
+    # Migration: force-update Guruji-related covers to the new uploaded image
+    await db.guru_messages.update_many({"author": "Guruji Sundar"}, {"$set": {"cover": GURUJI_IMAGE}})
+    await db.live_sessions.update_many({"host": "Guruji Sundar"}, {"$set": {"cover": GURUJI_IMAGE}})
+    await db.meditations.update_many({"title": "Morning Awakening"}, {"$set": {"cover": GURUJI_IMAGE}})
+    logger.info("Aathman API started, data seeded, guruji images synced.")
 
 
 app.include_router(api)

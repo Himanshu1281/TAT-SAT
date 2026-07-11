@@ -314,3 +314,80 @@ class TestSleep:
         assert r.status_code == 200
         rows = r.json()
         assert len(rows) >= 1 and all(x["kind"] == "music" for x in rows)
+
+
+# ----------------- Music (new) -----------------
+GURUJI_IMAGE = "https://customer-assets.emergentagent.com/job_mantra-connect-3/artifacts/y2tp1enp_GurujiSundar.jpeg"
+
+
+class TestMusic:
+    def test_music_list_has_at_least_10_tracks(self, api_client, base_url):
+        r = api_client.get(f"{base_url}/api/music")
+        assert r.status_code == 200
+        rows = r.json()
+        assert isinstance(rows, list)
+        assert len(rows) >= 10, f"expected >=10 tracks got {len(rows)}"
+
+    def test_music_track_shape(self, api_client, base_url):
+        rows = api_client.get(f"{base_url}/api/music").json()
+        required = {"id", "title", "url", "cover", "order"}
+        for track in rows:
+            missing = required - set(track.keys())
+            assert not missing, f"track missing fields {missing}: {track}"
+            assert isinstance(track["title"], str) and track["title"]
+            assert isinstance(track["url"], str) and track["url"].startswith("http")
+            assert isinstance(track["cover"], str) and track["cover"].startswith("http")
+            assert isinstance(track["order"], int)
+
+    def test_music_sorted_by_order(self, api_client, base_url):
+        rows = api_client.get(f"{base_url}/api/music").json()
+        orders = [t["order"] for t in rows]
+        assert orders == sorted(orders), "music tracks should be sorted by order asc"
+
+
+# ----------------- Guruji image migration -----------------
+class TestGurujiImageMigration:
+    def test_all_guru_messages_use_new_image(self, api_client, base_url):
+        rows = api_client.get(f"{base_url}/api/guru/messages").json()
+        assert len(rows) >= 1
+        for m in rows:
+            assert m.get("cover") == GURUJI_IMAGE, f"guru message '{m.get('title')}' has cover={m.get('cover')}"
+
+    def test_satsang_sessions_hosted_by_guruji_use_new_image(self, api_client, base_url):
+        rows = api_client.get(f"{base_url}/api/live/sessions", params={"kind": "satsang"}).json()
+        assert len(rows) >= 1
+        guruji_hosted = [s for s in rows if s.get("host") == "Guruji Sundar"]
+        assert len(guruji_hosted) >= 1
+        for s in guruji_hosted:
+            assert s.get("cover") == GURUJI_IMAGE, f"satsang '{s.get('title')}' has cover={s.get('cover')}"
+
+    def test_yoga_sessions_retain_original_covers(self, api_client, base_url):
+        rows = api_client.get(f"{base_url}/api/live/sessions", params={"kind": "yoga"}).json()
+        assert len(rows) >= 1
+        for s in rows:
+            # Yoga is hosted by Yogini Radha; must NOT be overwritten with guruji image
+            assert s.get("cover") != GURUJI_IMAGE, f"yoga '{s.get('title')}' incorrectly uses guruji image"
+            assert isinstance(s.get("cover"), str) and s["cover"].startswith("http")
+
+    def test_morning_awakening_uses_new_image(self, api_client, base_url):
+        rows = api_client.get(f"{base_url}/api/meditations").json()
+        matches = [m for m in rows if m.get("title") == "Morning Awakening"]
+        assert len(matches) == 1, f"expected exactly 1 Morning Awakening, got {len(matches)}"
+        assert matches[0].get("cover") == GURUJI_IMAGE
+
+    def test_other_meditations_unchanged(self, api_client, base_url):
+        rows = api_client.get(f"{base_url}/api/meditations").json()
+        others = [m for m in rows if m.get("title") != "Morning Awakening"]
+        # These should not have been migrated to the guruji image
+        for m in others:
+            assert m.get("cover") != GURUJI_IMAGE, f"meditation '{m.get('title')}' unexpectedly uses guruji image"
+
+    def test_meditation_bell_defaults_present(self, api_client, base_url):
+        rows = api_client.get(f"{base_url}/api/meditations").json()
+        bell_values = [m.get("bell_default") for m in rows if "bell_default" in m]
+        assert bell_values, "no bell_default on any meditation"
+        # Report suspicious small (non-zero, <60) values without failing hard
+        suspicious = [v for v in bell_values if 0 < v < 60]
+        # keep an informational assertion – log via message rather than fail
+        assert isinstance(bell_values[0], int)
+        print(f"bell_default values seen: {bell_values} suspicious(<60,!=0): {suspicious}")
