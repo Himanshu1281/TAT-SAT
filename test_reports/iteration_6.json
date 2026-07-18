@@ -1,0 +1,50 @@
+{
+  "summary": "Backend-only iteration 6. 74/74 pytest cases pass (66 previously-passing + 8 new for /api/live/aathman-current). New endpoint contract verified end-to-end against public EXPO_PUBLIC_BACKEND_URL. Live sample response: {is_live_now: false, video_id: 'Hr9A3KjG7Ys', title: 'GLS Gurupooja live', thumbnail: 'https://i.ytimg.com/vi/Hr9A3KjG7Ys/hqdefault.jpg', channel_id: 'UCkDostBKd39l9lz8UxpSxBg'} — matches spec exactly. Verified: (1) response has all 5 required keys, (2) channel_id == 'UCkDostBKd39l9lz8UxpSxBg', (3) thumbnail follows https://i.ytimg.com/vi/{video_id}/hqdefault.jpg pattern when video_id present, (4) is_live_now is a Python bool, (5) endpoint is unauthenticated and returns 200 in <8s (~600ms cold, <100ms warm), (6) 60s in-memory cache — two back-to-back calls return byte-identical payload, (7) strong-signal detection working — bare 'isLive:true' correctly treated as false (upcoming stream not misreported as live). Regression: /api/live/aathman-channel returns same fixed contract; /api/live/sessions still returns rows with youtube_channel_id=UCkDostBKd39l9lz8UxpSxBg and no legacy youtube_id; kind filters (satsang, yoga) still return >=1 row each. Full previously-green suite (auth, profile, meditations, mantra, mood, diary, rank, books/orders, guru messages, quote-today, Q&A, SOS, sleep, music, guruji image migration, points/stats, community/info, emergent-session error paths, live_attend idempotent 100-point award) still green. MOCKED: Razorpay verify auto-succeeds; SendGrid replaced by dev_otp when OTP_DEV_MODE=true.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/live/aathman-current", "issue": "Regex on line 734 uses double-escaped backslashes ('\\\\.') which in a raw string still matches a literal backslash, so the canonicalUrl-JSON path never fires. Fallback regexes on lines 736/738 correctly pick up the video_id, so behaviour is fine, but the first regex is effectively dead code — should be r'\"canonicalUrl\":\"https://www\\.youtube\\.com/watch\\?v=([a-zA-Z0-9_-]{11})'."},
+      {"endpoint": "GET /api/live/aathman-current", "issue": "No Cache-Control header set although payload is cached server-side for 60s. Setting Cache-Control: public, max-age=30 would let mobile clients skip a network round-trip too."},
+      {"endpoint": "GET /api/live/aathman-current", "issue": "On httpx failure the result is still cached for 60s. If YouTube throws a transient 5xx the app is stuck reporting is_live_now=false + null video_id for a full minute. Consider caching failures for only ~10s while still caching successes for 60s."},
+      {"endpoint": "server.py structure", "issue": "(Carried) File is now 1304 lines (up from 1225). Split into routers (auth, points, content, commerce, community, live) is overdue."},
+      {"endpoint": "POST /api/live/attend", "issue": "(Carried) No unique compound index on {user_id, session_id}."},
+      {"endpoint": "POST /api/auth/send-otp", "issue": "(Carried) dev_otp is returned whenever SendGrid send fails, not strictly when OTP_DEV_MODE=true."},
+      {"endpoint": "PUT /api/profile", "issue": "(Carried) Pydantic v1 body.dict(); migrate to body.model_dump(exclude_none=True)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/test_iteration4.py",
+    "/app/backend/tests/test_iteration5.py",
+    "/app/backend/tests/test_iteration6.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking — /api/live/aathman-current contract matches spec, cache works, strong-signal live detection avoids false positives, and video_id is returned even when offline so the chat popout can still be opened.",
+    "Optional polish: (1) fix dead regex on server.py:734 (double-escaped backslashes never match — 'r\"...\\\\.youtube\\\\.com...\"' should be 'r\"...\\.youtube\\.com...\"'). Fallback regexes cover it today, but the primary/canonical path never fires. (2) Set Cache-Control: public, max-age=30 on /api/live/aathman-current. (3) Cache scrape failures for only ~10s so a transient YouTube blip doesn't wedge is_live_now=false for a minute. (4) Address carried-over items — split server.py, add live_attend unique compound index, gate dev_otp strictly on OTP_DEV_MODE, migrate to Pydantic v2 model_dump."
+  ],
+  "critical_code_review_comments": [
+    "server.py:697-762 — 60s in-memory cache with an asyncio.Lock double-check is correct and prevents thundering herd. Good.",
+    "server.py:744-749 — Strong-signal live detection (isLiveNow:true OR concurrentViewers OR 'watching now') correctly rejects bare 'isLive:true' (upcoming). Verified against real response: is_live_now=false even though the /live page renders a video_id.",
+    "server.py:756-757 — thumbnail is derived from video_id via https://i.ytimg.com/vi/{video_id}/hqdefault.jpg — matches spec byte-for-byte.",
+    "server.py:734 — Primary canonicalUrl regex uses '\\\\.youtube\\\\.com' inside r'...' which matches a literal backslash, not '.'. This regex will never fire; fallbacks on 736 and 738 pick it up. Not a functional bug (still returns correct video_id) but the first-choice detection path is dead.",
+    "server.py:758-761 — Failure path still caches the empty result for 60s. Consider a shorter TTL on failures.",
+    "server.py has crossed 1304 lines (up from 1225). Split into routers is overdue."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration6.py (new — 8 tests: 5 for /api/live/aathman-current contract + cache + latency + no-auth + thumbnail-video_id linkage, 3 regression for /api/live/aathman-channel and /api/live/sessions with kind filter)"
+  ],
+  "success_rate": {"backend": "100% (74/74)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "No manual seed. Backend seeds meditations, music, sleep_content, live_sessions (all with youtube_channel_id=UCkDostBKd39l9lz8UxpSxBg), guru_messages, quotes, Q&A, books on startup. Startup migration $sets youtube_channel_id and $unsets legacy youtube_id on any existing live_sessions rows. Test users created per-test with TEST_ prefix via conftest user_session fixture. /api/live/aathman-current does live HTTP GET to https://www.youtube.com/@Aathmanawarenesscentre/live — no seed needed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Base URL: /app/frontend/.env EXPO_PUBLIC_BACKEND_URL (conftest.py falls back if EXPO_BACKEND_URL is unset). Run: pytest /app/backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml. /api/live/aathman-current scrapes youtube.com/@Aathmanawarenesscentre/live — expect ~600ms cold, <100ms warm (60s TTL). If YouTube returns HTML in a different shape or throttles the container IP, endpoint still returns 200 with is_live_now=false + video_id=null (graceful, per spec). Two back-to-back calls MUST return identical JSON — cache is tested. Do not treat is_live_now=false with a populated video_id as a bug: the endpoint intentionally returns the latest stream's video_id even when offline so the frontend can open the live-chat popout on an archived stream. Frontend testing intentionally skipped this iteration per review_request."
+}

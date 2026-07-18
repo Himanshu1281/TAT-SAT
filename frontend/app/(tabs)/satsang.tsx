@@ -20,17 +20,20 @@ export default function SatsangTab() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [channel, setChannel] = useState<any>(null);
+  const [current, setCurrent] = useState<any>(null);
   const router = useRouter();
 
   const load = useCallback(async (k: string) => {
     setLoading(true);
     try {
-      const [rows, ch] = await Promise.all([
+      const [rows, ch, cur] = await Promise.all([
         api.get(`/live/sessions?kind=${k}`),
         api.get('/live/aathman-channel'),
+        api.get('/live/aathman-current').catch(() => null),
       ]);
       setSessions(rows);
       setChannel(ch);
+      setCurrent(cur);
     } finally { setLoading(false); }
   }, []);
 
@@ -43,7 +46,7 @@ export default function SatsangTab() {
       params: {
         title: s.title,
         channel: s.youtube_channel_id || channel?.channel_id,
-        ytid: s.youtube_id || '',
+        ytid: current?.video_id || s.youtube_id || '',
       },
     });
   };
@@ -73,16 +76,25 @@ export default function SatsangTab() {
               <Ionicons name="logo-youtube" size={22} color="#FF0033" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.channelTitle}>Aathman YouTube — Live</Text>
-              <Text style={styles.channelSub}>All satsangs & yoga stream from @Aathmanawarenesscentre</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.channelTitle}>Aathman YouTube</Text>
+                {current?.is_live_now ? (
+                  <View style={styles.liveDotSm}><View style={styles.liveDotSmInner} /><Text style={styles.liveDotSmText}>LIVE</Text></View>
+                ) : null}
+              </View>
+              <Text style={styles.channelSub} numberOfLines={2}>
+                {current?.is_live_now
+                  ? `${current.title || 'Guruji is live now'} · watch + chat`
+                  : 'All satsangs & yoga stream here — watch live with chat'}
+              </Text>
             </View>
             <Pressable
               testID="watch-live-btn"
-              onPress={() => channel?.channel_id && router.push({ pathname: '/live-player', params: { channel: channel.channel_id, title: 'Aathman Live' } })}
+              onPress={() => channel?.channel_id && router.push({ pathname: '/live-player', params: { channel: channel.channel_id, ytid: current?.video_id || '', title: current?.title || 'Aathman Live' } })}
               style={styles.channelBtn}
             >
               <Ionicons name="play" size={14} color={colors.onBrand} />
-              <Text style={styles.channelBtnText}>Watch Live</Text>
+              <Text style={styles.channelBtnText}>{current?.is_live_now ? 'Join Live' : 'Watch'}</Text>
             </Pressable>
           </View>
 
@@ -145,6 +157,9 @@ const styles = StyleSheet.create({
   channelSub: { color: colors.muted, fontSize: 11, marginTop: 2 },
   channelBtn: { flexDirection: 'row', gap: 4, alignItems: 'center', backgroundColor: colors.brand, paddingHorizontal: 12, height: 36, borderRadius: radius.pill },
   channelBtnText: { color: colors.onBrand, fontWeight: '700', fontSize: 12 },
+  liveDotSm: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.error, paddingHorizontal: 6, height: 16, borderRadius: 8 },
+  liveDotSmInner: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#fff' },
+  liveDotSmText: { color: '#fff', fontSize: 8, fontWeight: '800', letterSpacing: 1 },
   card: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
   imgWrap: { height: 180, position: 'relative', backgroundColor: '#000' },
   imgBody: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: spacing.md },

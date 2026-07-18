@@ -693,6 +693,85 @@ async def aathman_channel():
     }
 
 
+# Cached scraping of the channel's /live page — refreshes at most once every 60s
+_LIVE_CACHE: dict = {"at": 0.0, "data": None}
+_LIVE_TTL = 60.0
+import asyncio as _asyncio
+_LIVE_LOCK = _asyncio.Lock()
+
+
+async def _scrape_aathman_live() -> dict:
+    import time as _t
+    import re as _re
+    import httpx as _httpx
+    now = _t.monotonic()
+    if _LIVE_CACHE["data"] and (now - _LIVE_CACHE["at"]) < _LIVE_TTL:
+        return _LIVE_CACHE["data"]
+    async with _LIVE_LOCK:
+        # Double-check inside lock
+        now = _t.monotonic()
+        if _LIVE_CACHE["data"] and (now - _LIVE_CACHE["at"]) < _LIVE_TTL:
+            return _LIVE_CACHE["data"]
+        result = {
+            "is_live_now": False,
+            "video_id": None,
+            "title": None,
+            "thumbnail": None,
+            "channel_id": AATHMAN_YOUTUBE_CHANNEL_ID,
+        }
+        try:
+            async with _httpx.AsyncClient(
+                timeout=8,
+                follow_redirects=True,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0 Safari/537.36",
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+            ) as http:
+                r = await http.get("https://www.youtube.com/@Aathmanawarenesscentre/live")
+            html = r.text or ""
+            # Prefer the canonical URL (most reliable)
+            m = _re.search(r'"canonicalUrl":"https://www\\.youtube\\.com/watch\\?v=([a-zA-Z0-9_-]{11})', html)
+            if not m:
+                m = _re.search(r'<link rel="canonical" href="https://www\.youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})', html)
+            if not m:
+                m = _re.search(r'"videoId":"([a-zA-Z0-9_-]{11})"', html)
+            if m:
+                result["video_id"] = m.group(1)
+            # Detect actual live state — require strong signals (currently broadcasting).
+            # Bare "isLive":true can also mean an *upcoming* premiere/stream, so we require
+            # concurrent viewers or the explicit "watching now" text.
+            if (
+                '"isLiveNow":true' in html
+                or '"concurrentViewers"' in html
+                or 'watching now' in html.lower()
+            ):
+                result["is_live_now"] = True
+            # Title
+            t = _re.search(r'"videoPrimaryInfoRenderer".*?"title":\{"runs":\[\{"text":"([^"]+)"', html)
+            if not t:
+                t = _re.search(r'<meta name="title" content="([^"]+)"', html)
+            if t:
+                result["title"] = t.group(1)
+            if result["video_id"]:
+                result["thumbnail"] = f"https://i.ytimg.com/vi/{result['video_id']}/hqdefault.jpg"
+        except Exception as e:
+            logger.info(f"scrape live failed: {e}")
+        _LIVE_CACHE["data"] = result
+        _LIVE_CACHE["at"] = _t.monotonic()
+        return result
+
+
+@api.get("/live/aathman-current")
+async def aathman_current():
+    """Best-effort detection of the currently-live (or latest) Aathman stream.
+
+    Returns {is_live_now, video_id, title, thumbnail, channel_id}. Freshness: 60s.
+    Uses lightweight scraping — no YouTube API key, no quota."""
+    data = await _scrape_aathman_live()
+    return data
+
+
 class LiveAttendBody(BaseModel):
     session_id: str
 
