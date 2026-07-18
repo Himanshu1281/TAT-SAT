@@ -10,8 +10,8 @@ export default function LivePlayer() {
   const router = useRouter();
 
   const src = channel
-    ? `https://www.youtube.com/embed/live_stream?channel=${channel}&autoplay=1&playsinline=1&rel=0`
-    : `https://www.youtube.com/embed/${ytid}?autoplay=1&playsinline=1&rel=0`;
+    ? `https://www.youtube.com/embed/live_stream?channel=${channel}&autoplay=1&mute=1&playsinline=1&rel=0`
+    : `https://www.youtube.com/embed/${ytid}?autoplay=1&mute=1&playsinline=1&rel=0`;
 
   const openOnYouTube = () => {
     const url = channel
