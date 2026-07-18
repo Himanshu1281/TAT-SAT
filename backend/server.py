@@ -275,6 +275,85 @@ async def me(user: dict = Depends(get_current_user)):
     return user
 
 
+class EmergentSessionBody(BaseModel):
+    session_id: str
+
+
+@api.post("/auth/emergent-session")
+async def emergent_session(body: EmergentSessionBody):
+    """Exchange an Emergent Auth session_id for our app JWT.
+
+    Calls Emergent's session-data endpoint to verify and pull the user profile,
+    upserts the user in MongoDB, and returns a JWT the client uses for all
+    subsequent /api requests.
+    """
+    import httpx
+    if not body.session_id:
+        raise HTTPException(400, "session_id required")
+    try:
+        async with httpx.AsyncClient(timeout=15) as http:
+            r = await http.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": body.session_id},
+            )
+        if r.status_code != 200:
+            raise HTTPException(401, "Invalid or expired session")
+        data = r.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Emergent Auth error: {e}")
+        raise HTTPException(502, "Auth provider unreachable")
+
+    email = (data.get("email") or "").strip().lower()
+    name = data.get("name") or ""
+    picture = data.get("picture") or None
+    if not email:
+        raise HTTPException(400, "Google account did not return an email")
+
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    is_new = False
+    if not user:
+        is_new = True
+        user = {
+            "id": new_id(),
+            "identifier": email,
+            "method": "google",
+            "email": email,
+            "phone": None,
+            "name": name,
+            "age": None,
+            "sex": None,
+            "gender": None,
+            "state": None,
+            "nationality": "India",
+            "avatar": picture,
+            "created_at": now_utc(),
+            "onboarded": False,
+            "streak": 0,
+            "last_active_date": None,
+        }
+        await db.users.insert_one(user)
+        user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    else:
+        # Sync latest google profile bits without overwriting user's chosen name if already set
+        updates: dict = {}
+        if not user.get("name") and name:
+            updates["name"] = name
+        if picture and picture != user.get("avatar"):
+            updates["avatar"] = picture
+        if updates:
+            await db.users.update_one({"id": user["id"]}, {"$set": updates})
+            user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+
+    token = make_token(user["id"])
+    if isinstance(user.get("created_at"), datetime):
+        user["created_at"] = iso(user["created_at"])
+    if user.get("last_active_date") and isinstance(user["last_active_date"], datetime):
+        user["last_active_date"] = iso(user["last_active_date"])
+    return {"token": token, "user": user, "is_new": is_new}
+
+
 # ------------ Profile ------------
 @api.put("/profile")
 async def update_profile(body: ProfileUpdate, user: dict = Depends(get_current_user)):

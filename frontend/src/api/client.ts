@@ -1,19 +1,43 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+import { storage } from '@/src/utils/storage';
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const TOKEN_KEY = 'aathman_token';
 
 let TOKEN: string | null = null;
 
+async function readToken(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(TOKEN_KEY) : null;
+      return raw;
+    } catch { return null; }
+  }
+  return await storage.secureGet<string>(TOKEN_KEY, '');
+}
+
+async function writeToken(t: string | null) {
+  if (Platform.OS === 'web') {
+    try {
+      if (t) window.localStorage.setItem(TOKEN_KEY, t);
+      else window.localStorage.removeItem(TOKEN_KEY);
+    } catch {}
+    return;
+  }
+  if (t) await storage.secureSet(TOKEN_KEY, t);
+  else await storage.secureRemove(TOKEN_KEY);
+}
+
 export async function loadToken() {
   if (TOKEN) return TOKEN;
-  TOKEN = await AsyncStorage.getItem('aathman_token');
+  const t = await readToken();
+  TOKEN = t && String(t).length > 0 ? String(t) : null;
   return TOKEN;
 }
 
 export async function setToken(t: string | null) {
   TOKEN = t;
-  if (t) await AsyncStorage.setItem('aathman_token', t);
-  else await AsyncStorage.removeItem('aathman_token');
+  await writeToken(t);
 }
 
 async function request(path: string, opts: RequestInit = {}) {

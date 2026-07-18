@@ -1,0 +1,45 @@
+{
+  "summary": "Backend-only iteration 4. 54/54 pytest cases pass against public EXPO_PUBLIC_BACKEND_URL (50 regression + 4 new emergent-session tests). Verified /api/auth/emergent-session contract: empty session_id -> 400 'session_id required'; missing field -> 422 (Pydantic); invalid/bogus session_id 'invalid-abc-does-not-exist' -> 401 'Invalid or expired session' (upstream Emergent auth/v1/env/oauth/session-data rejects it). Happy path {token, user, is_new} not testable without a real Google session, as expected. Full regression suite still green: /api/auth/send-otp + /api/auth/verify-otp end-to-end (dev_otp path), /api/auth/me, PUT /api/profile (sets onboarded=true), /api/stats/me (points, live_attended, breakdown, rules), /api/community/info, /api/books (9 Brahmatheerth issues), /api/live/attend (idempotent + 404), /api/mood/monthly-stats (30-day series + totals), /api/diary CRUD + /api/diary/dates + /api/diary/{id}, meditations/mantra/rank/orders(MOCKED razorpay)/guru/QA/SOS/sleep/music/guruji-image migration. MOCKED: Razorpay verify auto-succeeds; SendGrid replaced by dev_otp when OTP_DEV_MODE=true.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/emergent-session", "issue": "Upstream network errors are collapsed to 502 with a generic message. Consider logging the upstream status body (currently only exception path logs). Also no rate-limiting on this endpoint — a bad actor could probe session_ids."},
+      {"endpoint": "POST /api/auth/emergent-session", "issue": "When Emergent returns 200 but the payload has no email, endpoint returns 400 'Google account did not return an email' — this is correct behaviour but very unlikely; harmless."},
+      {"endpoint": "server.py structure", "issue": "(Carried) File is now 1200+ lines; still past the 700-line guideline. Split into routers (auth, points, content, commerce, community)."},
+      {"endpoint": "POST /api/live/attend", "issue": "(Carried) No unique compound index on {user_id, session_id} — race window on rapid double-tap."},
+      {"endpoint": "POST /api/auth/send-otp", "issue": "(Carried) dev_otp is returned whenever SendGrid send fails, not strictly when OTP_DEV_MODE=true."},
+      {"endpoint": "GET /api/rank", "issue": "(Carried) international scope is functionally identical to national when all users default nationality='India'; N+1 aggregations."},
+      {"endpoint": "PUT /api/profile", "issue": "(Carried) Pydantic v1 body.dict(); migrate to body.model_dump(exclude_none=True)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/test_iteration4.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking — Emergent auth endpoint contract is correct and stable. Optional: (1) log upstream Emergent status_code + body when != 200 to ease debugging real Google failures; (2) add basic per-IP rate-limit on /api/auth/emergent-session; (3) address carried-over items from iteration_3 (split server.py, add live_attend unique index, gate dev_otp on OTP_DEV_MODE strictly, migrate to Pydantic v2 model_dump).",
+    "Frontend testing was explicitly out of scope for this iteration. When it happens, add testID on the Google sign-in button + on the emergent-auth redirect handler screen, and verify the client posts {session_id} to /api/auth/emergent-session and stores the returned JWT for subsequent /api requests."
+  ],
+  "critical_code_review_comments": [
+    "/api/auth/emergent-session implementation is clean: session_id validated, upstream reachable inside try/except -> 502, non-200 -> 401, missing email -> 400, user upsert by email with is_new flag, JWT signed with sub=user.id — matches iteration_3 verify-otp flow so the client can treat both auth paths identically.",
+    "Legacy /api/auth/send-otp and /api/auth/verify-otp still exist and pass — safe to keep as fallback but note they are unused by the new frontend per the review request.",
+    "server.py is 1200 lines. High priority to split before adding more auth providers."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration4.py (new — 4 tests for /api/auth/emergent-session error paths and endpoint contract)"
+  ],
+  "success_rate": {"backend": "100% (54/54)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "No manual seed. Backend seeds meditations, music, sleep_content, live_sessions, guru_messages, quotes, Q&A, books on startup. Test users created per-test with TEST_ prefix for isolation. Iteration4 tests do not create any users (only hit /api/auth/emergent-session with bad inputs — no DB writes on error paths).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Base URL: /app/frontend/.env EXPO_PUBLIC_BACKEND_URL. Run: pytest /app/backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml. To test /api/auth/emergent-session happy path you need a real Emergent Google session_id (redirect user to https://auth.emergentagent.com/?redirect=<app_url>, catch the ?session_id= query param on callback, POST it to /api/auth/emergent-session). Error paths already covered in test_iteration4.py. Legacy OTP flow still works; both flows return {token, user, is_new} in identical shape."
+}
