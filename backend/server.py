@@ -731,7 +731,7 @@ async def _scrape_aathman_live() -> dict:
                 r = await http.get("https://www.youtube.com/@Aathmanawarenesscentre/live")
             html = r.text or ""
             # Prefer the canonical URL (most reliable)
-            m = _re.search(r'"canonicalUrl":"https://www\\.youtube\\.com/watch\\?v=([a-zA-Z0-9_-]{11})', html)
+            m = _re.search(r'"canonicalUrl":"https://www\.youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})', html)
             if not m:
                 m = _re.search(r'<link rel="canonical" href="https://www\.youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})', html)
             if not m:
