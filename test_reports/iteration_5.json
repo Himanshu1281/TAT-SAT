@@ -1,0 +1,47 @@
+{
+  "summary": "Backend-only iteration 5. 66/66 pytest cases pass against public EXPO_BACKEND_URL (54 regression + 12 new iteration-5). Verified GET /api/live/aathman-channel returns exact contract: channel_id='UCkDostBKd39l9lz8UxpSxBg', handle='@Aathmanawarenesscentre', streams_url contains '/@Aathmanawarenesscentre/streams', live_embed_url contains 'embed/live_stream?channel=UCkDostBKd39l9lz8UxpSxBg', and channel_url is populated. Verified live_sessions migration: every row returned by GET /api/live/sessions has youtube_channel_id=='UCkDostBKd39l9lz8UxpSxBg' and legacy 'youtube_id' field is completely absent. Verified GET /api/live/sessions?kind=satsang and ?kind=yoga each return >=2 rows all pointing to the Aathman channel. Verified POST /api/live/attend: first call awards 100 points, second call is idempotent (already_attended=true, no points added). Full regression still green: auth (send-otp/verify-otp/emergent-session error paths/me), community/info, /api/books (9 Brahmatheerth issues), /api/stats/me points+breakdown+rules, /api/mood/monthly-stats, /api/diary CRUD+dates, /api/rank all scopes, meditations/mantra/music/sleep/QA/SOS/guruji-image migration, orders (MOCKED razorpay). MOCKED: Razorpay verify auto-succeeds; SendGrid replaced by dev_otp when OTP_DEV_MODE=true.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/live/aathman-channel", "issue": "Endpoint is unauthenticated — fine for a public embed URL, but consider adding basic rate-limiting so it can't be scraped in a loop. Also no CDN cache headers set; response is fully static and could set Cache-Control: public, max-age=3600."},
+      {"endpoint": "GET /api/live/aathman-channel", "issue": "live_embed_url hard-codes autoplay=1&playsinline=1 — this is fine on mobile web but many browsers block autoplay without muted=1. Consider adding &mute=1 (or exposing an unmuted variant) so the embed actually starts playing in Chrome/Safari without user tap."},
+      {"endpoint": "server.py structure", "issue": "(Carried) File is now 1225 lines; still past the 700-line guideline. Split into routers (auth, points, content, commerce, community, live)."},
+      {"endpoint": "POST /api/live/attend", "issue": "(Carried) No unique compound index on {user_id, session_id} — race window on rapid double-tap could still double-insert."},
+      {"endpoint": "POST /api/auth/send-otp", "issue": "(Carried) dev_otp is returned whenever SendGrid send fails, not strictly when OTP_DEV_MODE=true."},
+      {"endpoint": "PUT /api/profile", "issue": "(Carried) Pydantic v1 body.dict(); migrate to body.model_dump(exclude_none=True)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/test_iteration4.py",
+    "/app/backend/tests/test_iteration5.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking — /api/live/aathman-channel endpoint contract matches spec and live_sessions migration is complete (youtube_channel_id set, youtube_id removed).",
+    "Optional polish: (1) add &mute=1 to live_embed_url so browsers actually autoplay the YouTube embed; (2) add Cache-Control on /api/live/aathman-channel (fully static payload); (3) address carried-over items — split server.py, add live_attend unique compound index, gate dev_otp strictly on OTP_DEV_MODE, migrate to Pydantic v2 model_dump.",
+    "Frontend testing was out of scope. When embedding the YouTube live_stream URL in the Satsang tab, verify it renders inside a WebView (React Native) or iframe (web) with allow='autoplay' and correct aspect ratio (16:9); also add testID on the video container."
+  ],
+  "critical_code_review_comments": [
+    "/api/live/aathman-channel (server.py:684-693) is a clean static endpoint returning the exact fields specified. Uses module-level constants AATHMAN_YOUTUBE_CHANNEL_ID and AATHMAN_YOUTUBE_STREAMS_URL (server.py:994-995), which is good — single source of truth.",
+    "live_sessions migration (server.py:1200-1207) runs on startup: $set youtube_channel_id + $unset youtube_id on all rows. Idempotent and safe to re-run. Seed data (server.py:1070-1085) already uses youtube_channel_id so new installs are consistent.",
+    "GET /api/live/sessions excludes _id via projection (server.py:677) — good, no ObjectId leaks. datetime->iso conversion done for start_at.",
+    "server.py has crossed 1225 lines. Splitting into routers is now overdue."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration5.py (new — 12 tests: 1 for /api/live/aathman-channel contract, 3 for live_sessions migration and kind filters, 1 for /api/live/attend idempotency with 100-point award, 7 regression spot checks)"
+  ],
+  "success_rate": {"backend": "100% (66/66)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "No manual seed. Backend seeds meditations, music, sleep_content, live_sessions (all with youtube_channel_id=UCkDostBKd39l9lz8UxpSxBg), guru_messages, quotes, Q&A, books on startup. Startup migration $sets youtube_channel_id and $unsets legacy youtube_id on any existing live_sessions rows. Test users created per-test with TEST_ prefix via conftest user_session fixture.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Base URL: /app/frontend/.env EXPO_BACKEND_URL (or EXPO_PUBLIC_BACKEND_URL). Run: pytest /app/backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml. New endpoint /api/live/aathman-channel is unauthenticated and returns a fixed JSON payload — good for frontend to prefetch once and cache. All live_sessions rows are guaranteed to have youtube_channel_id set and no youtube_id. If frontend testing runs next, focus on: Satsang tab embedding live_embed_url via WebView/iframe, testID on the video player container, and graceful fallback when the channel is not currently live (YouTube shows an 'offline' overlay inside the same embed URL — no error thrown)."
+}

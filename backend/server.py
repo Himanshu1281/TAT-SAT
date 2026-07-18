@@ -681,6 +681,18 @@ async def live_sessions(kind: Optional[str] = None):
     return rows
 
 
+@api.get("/live/aathman-channel")
+async def aathman_channel():
+    """Return the Aathman Awareness Centre YouTube channel embed info."""
+    return {
+        "channel_id": AATHMAN_YOUTUBE_CHANNEL_ID,
+        "handle": "@Aathmanawarenesscentre",
+        "streams_url": AATHMAN_YOUTUBE_STREAMS_URL,
+        "live_embed_url": f"https://www.youtube.com/embed/live_stream?channel={AATHMAN_YOUTUBE_CHANNEL_ID}&autoplay=1&playsinline=1",
+        "channel_url": "https://www.youtube.com/@Aathmanawarenesscentre",
+    }
+
+
 class LiveAttendBody(BaseModel):
     session_id: str
 
@@ -979,6 +991,9 @@ async def root():
     return {"message": "Aathman API is awake", "time": iso(now_utc())}
 
 
+AATHMAN_YOUTUBE_CHANNEL_ID = "UCkDostBKd39l9lz8UxpSxBg"
+AATHMAN_YOUTUBE_STREAMS_URL = "https://www.youtube.com/@Aathmanawarenesscentre/streams"
+
 GURUJI_IMAGE_LEGACY = "https://customer-assets.emergentagent.com/job_mantra-connect-3/artifacts/y2tp1enp_GurujiSundar.jpeg"
 
 # ------------ Seed ------------
@@ -1048,25 +1063,26 @@ async def seed_data():
         base = now_utc()
         await db.live_sessions.insert_many([
             {"id": new_id(), "kind": "satsang", "title": "Weekly Satsang with Guruji",
-             "description": "The Power of Silence — a live discourse.", "host": "Guruji Sundar",
+             "description": "Live discourse from HH Guruji Sundar on the Aathman YouTube channel.",
+             "host": "Guruji Sundar",
              "start_at": base + timedelta(days=1, hours=2),
              "cover": GURUJI_IMAGE,
-             "youtube_id": "5qap5aO4i9A", "is_live": True},
+             "youtube_channel_id": AATHMAN_YOUTUBE_CHANNEL_ID, "is_live": True},
             {"id": new_id(), "kind": "satsang", "title": "Living in Awareness",
              "description": "Weekly discourse on presence.", "host": "Guruji Sundar",
              "start_at": base + timedelta(days=8),
              "cover": GURUJI_IMAGE,
-             "youtube_id": "jfKfPfyJRdk", "is_live": False},
+             "youtube_channel_id": AATHMAN_YOUTUBE_CHANNEL_ID, "is_live": False},
             {"id": new_id(), "kind": "yoga", "title": "Morning Yoga Flow",
              "description": "Find balance in body and mind.", "host": "Yogini Radha",
              "start_at": base + timedelta(days=2),
              "cover": "https://images.pexels.com/photos/10205915/pexels-photo-10205915.jpeg",
-             "youtube_id": "v7AYKMP6rOE", "is_live": True},
+             "youtube_channel_id": AATHMAN_YOUTUBE_CHANNEL_ID, "is_live": True},
             {"id": new_id(), "kind": "yoga", "title": "Evening Restore",
              "description": "Gentle poses for deep relaxation.", "host": "Yogini Radha",
              "start_at": base + timedelta(days=4),
              "cover": "https://images.pexels.com/photos/10255271/pexels-photo-10255271.jpeg",
-             "youtube_id": "COp7BR_Dvps", "is_live": False},
+             "youtube_channel_id": AATHMAN_YOUTUBE_CHANNEL_ID, "is_live": False},
         ])
     # Books - real Brahmatheerth magazine issues from gurujisundar.com/shop
     BRAHMATHEERTH = [
@@ -1181,6 +1197,14 @@ async def on_startup():
     }
     for title, val in bell_map.items():
         await db.meditations.update_many({"title": title}, {"$set": {"bell_default": val}})
+    # Migration: attach Aathman YouTube channel to all live sessions & remove stale hardcoded videos
+    await db.live_sessions.update_many(
+        {},
+        {
+            "$set": {"youtube_channel_id": AATHMAN_YOUTUBE_CHANNEL_ID},
+            "$unset": {"youtube_id": ""},
+        },
+    )
     logger.info("Aathman API started, data seeded, guruji images synced.")
 
 

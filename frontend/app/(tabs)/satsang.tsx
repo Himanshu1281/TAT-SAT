@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Linking } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,18 +13,40 @@ const KINDS = [
   { key: 'yoga', label: 'Weekly Yoga' },
 ];
 
+const AATHMAN_STREAMS_URL = 'https://www.youtube.com/@Aathmanawarenesscentre/streams';
+
 export default function SatsangTab() {
   const [kind, setKind] = useState<'satsang' | 'yoga'>('satsang');
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [channel, setChannel] = useState<any>(null);
   const router = useRouter();
 
   const load = useCallback(async (k: string) => {
     setLoading(true);
-    try { setSessions(await api.get(`/live/sessions?kind=${k}`)); } finally { setLoading(false); }
+    try {
+      const [rows, ch] = await Promise.all([
+        api.get(`/live/sessions?kind=${k}`),
+        api.get('/live/aathman-channel'),
+      ]);
+      setSessions(rows);
+      setChannel(ch);
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(kind); }, [kind, load]);
+
+  const openLive = async (s: any) => {
+    try { await api.post('/live/attend', { session_id: s.id }); } catch {}
+    router.push({
+      pathname: '/live-player',
+      params: {
+        title: s.title,
+        channel: s.youtube_channel_id || channel?.channel_id,
+        ytid: s.youtube_id || '',
+      },
+    });
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }} testID="satsang-screen">
@@ -46,6 +68,24 @@ export default function SatsangTab() {
         <View style={{ paddingTop: 40 }}><ActivityIndicator color={colors.brand} /></View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: 40 }}>
+          <View style={styles.channelCard} testID="aathman-channel-card">
+            <View style={styles.channelIcon}>
+              <Ionicons name="logo-youtube" size={22} color="#FF0033" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.channelTitle}>Aathman YouTube — Live</Text>
+              <Text style={styles.channelSub}>All satsangs & yoga stream from @Aathmanawarenesscentre</Text>
+            </View>
+            <Pressable
+              testID="watch-live-btn"
+              onPress={() => channel?.channel_id && router.push({ pathname: '/live-player', params: { channel: channel.channel_id, title: 'Aathman Live' } })}
+              style={styles.channelBtn}
+            >
+              <Ionicons name="play" size={14} color={colors.onBrand} />
+              <Text style={styles.channelBtnText}>Watch Live</Text>
+            </Pressable>
+          </View>
+
           {sessions.map((s) => (
             <View key={s.id} style={styles.card} testID={`live-${s.id}`}>
               <View style={styles.imgWrap}>
@@ -67,16 +107,23 @@ export default function SatsangTab() {
                     <Text style={styles.meta}>{new Date(s.start_at).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
                   </View>
                 </View>
-                <Pressable testID={`join-${s.id}`} style={styles.joinBtn} onPress={async () => {
-                  try { await api.post('/live/attend', { session_id: s.id }); } catch {}
-                  router.push({ pathname: '/live-player', params: { id: s.id, ytid: s.youtube_id, title: s.title } });
-                }}>
+                <Pressable testID={`join-${s.id}`} style={styles.joinBtn} onPress={() => openLive(s)}>
                   <Ionicons name="play" size={14} color={colors.onBrand} />
                   <Text style={styles.joinText}>{s.is_live ? 'Join Live' : 'Watch'}</Text>
                 </Pressable>
               </View>
             </View>
           ))}
+
+          <Pressable
+            testID="all-streams-btn"
+            onPress={() => Linking.openURL(AATHMAN_STREAMS_URL)}
+            style={styles.allStreamsBtn}
+          >
+            <Ionicons name="logo-youtube" size={16} color={colors.onSurface} />
+            <Text style={styles.allStreamsText}>See all past streams</Text>
+            <Ionicons name="open-outline" size={14} color={colors.muted} />
+          </Pressable>
         </ScrollView>
       )}
     </View>
@@ -92,6 +139,12 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: colors.onSurface },
   tabText: { fontWeight: '600', color: colors.onSurface, fontSize: 13 },
   tabTextActive: { color: '#fff' },
+  channelCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
+  channelIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFF6E1', alignItems: 'center', justifyContent: 'center' },
+  channelTitle: { fontWeight: '700', color: colors.onSurface, fontSize: 14 },
+  channelSub: { color: colors.muted, fontSize: 11, marginTop: 2 },
+  channelBtn: { flexDirection: 'row', gap: 4, alignItems: 'center', backgroundColor: colors.brand, paddingHorizontal: 12, height: 36, borderRadius: radius.pill },
+  channelBtnText: { color: colors.onBrand, fontWeight: '700', fontSize: 12 },
   card: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
   imgWrap: { height: 180, position: 'relative', backgroundColor: '#000' },
   imgBody: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: spacing.md },
@@ -106,4 +159,6 @@ const styles = StyleSheet.create({
   meta: { fontSize: 11, color: colors.muted },
   joinBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.brand, paddingHorizontal: 14, height: 40, borderRadius: radius.pill },
   joinText: { color: colors.onBrand, fontWeight: '700', fontSize: 13 },
+  allStreamsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: spacing.sm, paddingVertical: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
+  allStreamsText: { color: colors.onSurface, fontWeight: '700', fontSize: 13 },
 });

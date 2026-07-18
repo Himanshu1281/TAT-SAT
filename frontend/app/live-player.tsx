@@ -1,14 +1,24 @@
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform, Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { colors, spacing, radius } from '@/src/theme';
+import { colors, spacing } from '@/src/theme';
 
 export default function LivePlayer() {
-  const { ytid, title } = useLocalSearchParams<{ ytid: string; title: string }>();
+  const { ytid, channel, title } = useLocalSearchParams<{ ytid?: string; channel?: string; title?: string }>();
   const router = useRouter();
-  const src = `https://www.youtube.com/embed/${ytid}?autoplay=1&playsinline=1&rel=0`;
+
+  const src = channel
+    ? `https://www.youtube.com/embed/live_stream?channel=${channel}&autoplay=1&playsinline=1&rel=0`
+    : `https://www.youtube.com/embed/${ytid}?autoplay=1&playsinline=1&rel=0`;
+
+  const openOnYouTube = () => {
+    const url = channel
+      ? `https://www.youtube.com/channel/${channel}/live`
+      : `https://www.youtube.com/watch?v=${ytid}`;
+    Linking.openURL(url);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }} testID="live-player">
@@ -18,12 +28,14 @@ export default function LivePlayer() {
             <Ionicons name="chevron-down" size={22} color="#fff" />
           </Pressable>
           <Text style={styles.title} numberOfLines={1}>{String(title || 'Live')}</Text>
-          <View style={{ width: 40 }} />
+          <Pressable testID="live-open-youtube" onPress={openOnYouTube} style={styles.iconBtn}>
+            <Ionicons name="logo-youtube" size={18} color="#fff" />
+          </Pressable>
         </View>
         <View style={styles.playerWrap}>
           {Platform.OS === 'web' ? (
             // @ts-ignore
-            <iframe src={src} style={{ width: '100%', height: '100%', border: 0 }} allow="autoplay; encrypted-media" allowFullScreen />
+            <iframe src={src} style={{ width: '100%', height: '100%', border: 0 }} allow="autoplay; encrypted-media; fullscreen" allowFullScreen />
           ) : (
             <WebView
               source={{ uri: src }}
