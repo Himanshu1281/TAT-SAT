@@ -1297,23 +1297,13 @@ async def seed_data():
              "cover": "https://images.pexels.com/photos/10255271/pexels-photo-10255271.jpeg",
              "description": "Deep concentration practice.", "bell_default": 900},
         ])
-    # Music library
+    # Music library (uploaded meditation tracks)
     if await db.music.count_documents({}) == 0:
-        # Working royalty-free/CC0 sources
-        OCEAN = "https://actions.google.com/sounds/v1/water/waves_crashing_on_rock_beach.ogg"
-        RAIN = "https://actions.google.com/sounds/v1/weather/light_rain.ogg"
-        BOWL = "https://cdn.freesound.org/previews/415/415209_5121236-hq.mp3"
         await db.music.insert_many([
-            {"id": new_id(), "title": "Himalayan Singing Bowls", "url": BOWL, "cover": "https://images.unsplash.com/photo-1544924406-c8a4b1d8b0be", "order": 1},
-            {"id": new_id(), "title": "Om Drone", "url": BOWL, "cover": "https://images.unsplash.com/photo-1519681393784-d120267933ba", "order": 2},
-            {"id": new_id(), "title": "Temple Bells Ambient", "url": BOWL, "cover": "https://images.unsplash.com/photo-1608900203293-ebc770fac3f9", "order": 3},
-            {"id": new_id(), "title": "Tibetan Bowls", "url": BOWL, "cover": "https://images.unsplash.com/photo-1544592218-b546f7b9ddb4", "order": 4},
-            {"id": new_id(), "title": "River & Birds", "url": RAIN, "cover": "https://images.pexels.com/photos/10205915/pexels-photo-10205915.jpeg", "order": 5},
-            {"id": new_id(), "title": "Rain Meditation", "url": RAIN, "cover": "https://images.pexels.com/photos/13849283/pexels-photo-13849283.jpeg", "order": 6},
-            {"id": new_id(), "title": "Deep Space Meditation", "url": OCEAN, "cover": "https://images.pexels.com/photos/10255271/pexels-photo-10255271.jpeg", "order": 7},
-            {"id": new_id(), "title": "Wind Chimes", "url": BOWL, "cover": "https://images.unsplash.com/photo-1543934776-32d1cc654abb", "order": 8},
-            {"id": new_id(), "title": "Forest Ambience", "url": RAIN, "cover": "https://images.pexels.com/photos/10205915/pexels-photo-10205915.jpeg", "order": 9},
-            {"id": new_id(), "title": "Ocean Waves", "url": OCEAN, "cover": "https://images.pexels.com/photos/13849283/pexels-photo-13849283.jpeg", "order": 10},
+            {"id": new_id(), "title": "Call From Within", "url": "https://customer-assets-39nsmqrw.emergentagent.net/job_mantra-connect-3/artifacts/gq6t50ik_call%20from%20within.mp3", "cover": "https://images.unsplash.com/photo-1544924406-c8a4b1d8b0be", "order": 1},
+            {"id": new_id(), "title": "By The Waves", "url": "https://customer-assets-39nsmqrw.emergentagent.net/job_mantra-connect-3/artifacts/9dxrbva1_By%20The%20Waves.mp3", "cover": "https://images.pexels.com/photos/13849283/pexels-photo-13849283.jpeg", "order": 2},
+            {"id": new_id(), "title": "By The Waterfall", "url": "https://customer-assets-39nsmqrw.emergentagent.net/job_mantra-connect-3/artifacts/c97asdsy_By%20The%20Waterfall.mp3", "cover": "https://images.unsplash.com/photo-1544592218-b546f7b9ddb4", "order": 3},
+            {"id": new_id(), "title": "Birds in Nature", "url": "https://customer-assets-39nsmqrw.emergentagent.net/job_mantra-connect-3/artifacts/d8fs5rkn_Birds%20in%20Nature.mp3", "cover": "https://images.pexels.com/photos/10205915/pexels-photo-10205915.jpeg", "order": 4},
         ])
     # Sleep content
     if await db.sleep_content.count_documents({}) == 0:
@@ -1458,6 +1448,19 @@ async def seed_data():
 
 @app.on_event("startup")
 async def on_startup():
+    # Migration: replace the old placeholder meditation music with the 4 uploaded MP3s.
+    # If the DB still has any legacy track (freesound / actions.google.com URLs, or any of
+    # the retired titles), drop the whole collection so seed_data re-inserts the new set.
+    legacy_titles = {
+        "Himalayan Singing Bowls", "Om Drone", "Temple Bells Ambient", "Tibetan Bowls",
+        "River & Birds", "Rain Meditation", "Deep Space Meditation",
+        "Wind Chimes", "Forest Ambience", "Ocean Waves",
+    }
+    if await db.music.count_documents({"$or": [
+        {"title": {"$in": list(legacy_titles)}},
+        {"url": {"$regex": "actions\\.google\\.com|freesound\\.org"}},
+    ]}) > 0:
+        await db.music.delete_many({})
     await seed_data()
     # Migration: force-update Guruji-related covers to the new uploaded image
     await db.guru_messages.update_many({"author": "Guruji Sundar"}, {"$set": {"cover": GURUJI_IMAGE}})
