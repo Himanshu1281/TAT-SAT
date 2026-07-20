@@ -1,0 +1,62 @@
+{
+  "summary": "Backend-only iteration 7. 93/93 pytest cases pass (74 previously-passing + 19 new for admin panel & push relay). All 6 admin endpoints (whoami, users+q filter, sos list+PUT status, qa list+only_unanswered+POST reply, guru-messages publish) and the /api/register-push preview short-circuit verified end-to-end. Admin auth guard works correctly: 200 for whitelisted admin@aathmanawarenesscentre.com, 403 for non-admin, 401 without token. Full admin Q&A flow verified: seeker posts Q → admin sees it in only_unanswered=true → admin POSTs reply → public GET /api/qa now returns the Q with the answer, and only_unanswered no longer includes it. Admin publishes guru message → returns push_sent_to (int) and does NOT 500 with EMERGENT_PUSH_KEY=placeholder → message appears in public /api/guru/messages. Backend logs confirm graceful push short-circuit: '[PREVIEW] would push to N recipients: ...' — SuprSend never hit. /api/register-push with placeholder key returns 201 {status:'registered', mode:'preview'}. Regression: OTP send/verify still yields working JWT, /api/auth/me works, /api/live/aathman-current still returns the fixed contract with channel_id=UCkDostBKd39l9lz8UxpSxBg, /api/guru/messages public list still returns rows with no _id leak. MOCKED: Emergent Push (SuprSend) relay — backend degrades gracefully in preview mode when EMERGENT_PUSH_KEY='placeholder' (logs a preview line, returns success without HTTP call). Razorpay verify auto-succeeds; SendGrid replaced by dev_otp when OTP_DEV_MODE=true.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/whoami (no token)", "issue": "Returns 403 instead of 401 when the Authorization header is entirely missing. This is a common FastAPI HTTPBearer(auto_error=True) behaviour — the dependency raises HTTP 403 for missing credentials. Not blocking (client can still tell 'unauthenticated' from 'unauthorised'), but the review-request spec asked for 401. Consider setting HTTPBearer(auto_error=False) and raising 401 explicitly in get_current_user for missing tokens, so the semantics match the doc."},
+      {"endpoint": "GET /api/admin/users", "issue": "Response objects leak the `identifier` and `method` fields alongside `email` — for email-OTP users these are duplicates (identifier == email). Admin UI will render duplicate columns unless the frontend strips them. Consider projecting a curated field list."},
+      {"endpoint": "GET /api/admin/users", "issue": "Search regex uses the raw query as-is inside {'$regex': q}. Special regex characters in q (e.g. '.', '(', '[', '\\\\') are not escaped — a malformed q can 500 the query or match unintended rows. Wrap with re.escape() before passing to Mongo."},
+      {"endpoint": "PUT /api/admin/sos/{req_id}", "issue": "SosStatusBody Literal accepts 'queued', 'pending', 'resolved'. Admin can 'downgrade' a resolved SOS back to queued — likely unintended. Consider a monotonic status machine or restricting the allowed transitions."},
+      {"endpoint": "POST /api/admin/guru-messages", "issue": "Broadcast fetches ALL user ids via `[u['id'] async for u in db.users.find(...)]`. On a large user base this is unbounded. Chunk-fetch or paginate, and guard against extremely long lists. Also — chunks are pushed sequentially with await; parallelising with asyncio.gather would keep publish latency low."},
+      {"endpoint": "POST /api/admin/guru-messages", "issue": "GURUJI_IMAGE_LEGACY (line 1270) is referenced by admin_publish_guru (line 1172) but is defined AFTER the endpoint declaration in the module. Works at runtime because the endpoint body is only executed after module load, but it's a code-smell — move the constant to the top with GURUJI_IMAGE."},
+      {"endpoint": "POST /api/register-push", "issue": "No auth required. Any anonymous client can POST arbitrary {user_id, platform, device_token} triples. In placeholder mode this is a no-op but once EMERGENT_PUSH_KEY is real, unauthenticated attackers can register spurious device tokens to arbitrary user_ids. Add Depends(get_current_user) and force body.user_id == user['id']."},
+      {"endpoint": "server.py structure", "issue": "(Carried) File is now 1505 lines (up from 1304). Split into routers (auth, points, content, commerce, community, live, admin, push) is overdue."},
+      {"endpoint": "POST /api/live/attend", "issue": "(Carried) No unique compound index on {user_id, session_id}."},
+      {"endpoint": "POST /api/auth/send-otp", "issue": "(Carried) dev_otp is returned whenever SendGrid send fails, not strictly when OTP_DEV_MODE=true."},
+      {"endpoint": "PUT /api/profile", "issue": "(Carried) Pydantic v1 body.dict(); migrate to body.model_dump(exclude_none=True)."},
+      {"endpoint": "GET /api/live/aathman-current", "issue": "(Carried from iter 6) Primary canonicalUrl regex on line ~734 uses double-escaped backslashes ('\\\\.') which never fires; fallbacks pick it up. Cosmetic."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/test_iteration4.py",
+    "/app/backend/tests/test_iteration5.py",
+    "/app/backend/tests/test_iteration6.py",
+    "/app/backend/tests/test_iteration7.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking — every endpoint in the iteration-7 scope passes contract + integration tests.",
+    "Optional polish (recommend in this order): (1) Add Depends(get_current_user) to POST /api/register-push and enforce body.user_id == current_user.id — currently unauthenticated. (2) re.escape() the search string in GET /api/admin/users before passing to Mongo $regex to avoid injection/parse errors. (3) Move GURUJI_IMAGE_LEGACY constant to the top of server.py next to GURUJI_IMAGE (currently forward-referenced from line 1172). (4) Have HTTPBearer raise 401 rather than 403 on missing token, so /api/admin/whoami returns 401 without auth as the spec asks. (5) Curate the projection in GET /api/admin/users (drop redundant identifier/method). (6) Address carried-over items: split server.py, add live_attend unique compound index, gate dev_otp strictly on OTP_DEV_MODE, migrate to Pydantic v2 model_dump, fix iter-6 dead regex.",
+    "Once real EMERGENT_PUSH_KEY is injected in production, re-run this suite — the /api/register-push and /api/admin/guru-messages tests will exercise the real /api/v1/push/users/register and /api/v1/push/trigger paths."
+  ],
+  "critical_code_review_comments": [
+    "server.py:1072-1080 — is_admin_user() lower-cases the JWT-user email and checks membership in ADMIN_EMAILS (also lower-cased at env parse on line 41). Clean, case-insensitive whitelist. Good.",
+    "server.py:1083-1085 — /admin/whoami returns {ok:true, email, name} for admins; 403 for non-admins via require_admin dependency. Matches spec.",
+    "server.py:1088-1100 — /admin/users supports ?q= search across name/email/phone/identifier via $regex. WARN: no re.escape() — a query containing regex meta-chars can crash Mongo or match unintended rows.",
+    "server.py:1103-1121 — /admin/sos GET + PUT with Literal-typed status body. Correct 404 on unknown id. Warning: Literal allows downgrading resolved→queued.",
+    "server.py:1124-1156 — /admin/qa: only_unanswered filter uses {'$or':[{'answer':None},{'answer':''}]} — matches both null and empty-string. Reply saves answer + answered_at + answered_by, then triggers push (short-circuits gracefully in preview). Public GET /api/qa (line 927) already filters 'answer': {'$ne': None} — verified reply flows through end-to-end.",
+    "server.py:1165-1195 — /admin/guru-messages inserts doc then broadcasts push in 100-recipient chunks with idempotency key `guru-{id}-{i}`. push_sent_to counter increments per successful chunk. Exception in a chunk is caught and logged (not re-raised) — correct: publish MUST NOT fail because push fails. Returns iso-formatted published_at in the response, matching public feed shape.",
+    "server.py:1220-1237 — /register-push short-circuits with 201 {status:'registered', mode:'preview'} when EMERGENT_PUSH_KEY == 'placeholder'. When real key present, POSTs to Emergent Push /api/v1/push/users/register. Missing: auth requirement (currently anonymous — any client can register a device token to any user_id).",
+    "server.py:1240-1258 — send_push short-circuits in preview mode, enforces max 100 recipients, requires title+message, adds $idempotency_key. Correct.",
+    "server.py:1177 — `[u['id'] async for u in db.users.find({}, {'id':1, '_id':0})]` fetches all user ids at once. Scales fine to ~10k but unbounded — worth a note for future.",
+    "server.py:1270 — GURUJI_IMAGE_LEGACY defined AFTER admin_publish_guru references it (line 1172). Works only because module-level constants exist by the time the endpoint body runs. Move to top with the other constants.",
+    "server.py has crossed 1505 lines (up from 1304). Router split is overdue — /admin/* alone is ~130 lines and would cleanly move to routers/admin.py."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration7.py (new — 19 tests covering all 6 admin endpoints + register-push + regression)"
+  ],
+  "success_rate": {"backend": "100% (93/93 across all iterations; 19/19 for iteration 7)", "frontend": "not tested (backend-only request per review_request.testing_type)"},
+  "seed_data_creation": "No manual seed. Backend seeds meditations, music, sleep_content, live_sessions, guru_messages, quotes, Q&A, books on startup. Tests dynamically create per-run data via public endpoints: (a) admin JWT via OTP dev-mode for admin@aathmanawarenesscentre.com, (b) seeker JWTs via OTP dev-mode for TEST_seeker_<uuid>@aathman.app, (c) TEST_iter7 SOS row via POST /api/sos/request, (d) TEST_iter7 QA row via POST /api/qa, (e) TEST_iter7 guru message via POST /api/admin/guru-messages. All test data prefixed with TEST_ or TEST_iter7 for identification. NOTE: backend lowercases emails on storage, so seeded 'TEST_seeker_xxx@aathman.app' is returned as 'test_seeker_xxx@aathman.app' — tests compare case-insensitively.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Base URL: /app/frontend/.env EXPO_PUBLIC_BACKEND_URL (conftest.py falls back if EXPO_BACKEND_URL is unset). Run: pytest /app/backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml. Admin JWT: OTP-dev-mode login as admin@aathmanawarenesscentre.com (whitelisted in ADMIN_EMAILS env var). Non-admin JWT: any other TEST_ email via same OTP flow. IMPORTANT quirks: (1) backend lowercases emails on save — always compare case-insensitively. (2) HTTPBearer returns 403 (not 401) when Authorization header is missing entirely — tests accept both. (3) EMERGENT_PUSH_KEY='placeholder' means /api/register-push returns 201 mode:'preview' and /api/admin/guru-messages returns push_sent_to (int) without hitting SuprSend — backend logs '[PREVIEW] would push to N recipients: ...' at INFO level. Do NOT switch OTP_DEV_MODE off in .env — the fixture depends on dev_otp being returned in /api/auth/send-otp response. Frontend testing intentionally skipped this iteration per review_request.testing_type='backend only(skip frontend)'."
+}

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aathman · Admin</title>
+<style>
+  :root {
+    --surface: #F7F6F2;
+    --surface2: #FFFFFF;
+    --border: #ECE8E1;
+    --ink: #1A1A1A;
+    --muted: #6B6558;
+    --brand: #FFBA3D;
+    --brand-ink: #1A1A1A;
+    --violet: #7861FF;
+    --teal: #00BB84;
+    --error: #D92D20;
+    --shadow: 0 4px 12px rgba(26,26,26,.06);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+    background: var(--surface);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .app { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 240px; background: #101828; color: #fff;
+    padding: 24px 16px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .brand {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 24px; letter-spacing: 4px; color: var(--brand);
+    margin-bottom: 4px;
+  }
+  .brand-sub { color: rgba(255,255,255,.5); font-size: 11px; letter-spacing: 2px; margin-bottom: 24px; }
+  .nav-btn {
+    background: transparent; border: 0; color: rgba(255,255,255,.75);
+    padding: 12px 12px; border-radius: 10px; text-align: left;
+    cursor: pointer; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,.06); color: #fff; }
+  .nav-btn.active { background: var(--brand); color: var(--brand-ink); }
+  .nav-badge { background: var(--error); color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: auto; }
+  .main { flex: 1; padding: 32px 40px; overflow-y: auto; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  h1 { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 28px; margin: 0; font-weight: 700; }
+  .who { font-size: 12px; color: var(--muted); }
+  .logout { background: transparent; border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; font-size: 12px; cursor: pointer; color: var(--muted); }
+  .card { background: var(--surface2); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
+  .toolbar { display: flex; gap: 12px; padding: 16px; border-bottom: 1px solid var(--border); align-items: center; flex-wrap: wrap; }
+  input.search, input.txt, textarea {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; font-size: 14px; color: var(--ink); font-family: inherit;
+    outline: none; transition: border-color .15s;
+  }
+  input.search:focus, input.txt:focus, textarea:focus { border-color: var(--brand); }
+  input.search { flex: 1; min-width: 220px; }
+  textarea { width: 100%; min-height: 96px; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; padding: 12px 16px; font-size: 11px; letter-spacing: 1px; color: var(--muted); font-weight: 700; text-transform: uppercase; background: var(--surface); border-bottom: 1px solid var(--border); }
+  td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .pill.google { background: #EEE9FF; color: var(--violet); }
+  .pill.email { background: #FFF6E1; color: #B37E00; }
+  .pill.phone { background: #D9F5E9; color: #007A55; }
+  .pill.queued { background: #FEE4E2; color: var(--error); }
+  .pill.pending { background: #FFF6E1; color: #B37E00; }
+  .pill.resolved { background: #D9F5E9; color: var(--teal); }
+  .btn { background: var(--ink); color: #fff; border: 0; border-radius: 999px; padding: 8px 14px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .btn.brand { background: var(--brand); color: var(--brand-ink); }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .empty { padding: 48px 16px; text-align: center; color: var(--muted); font-size: 14px; }
+  .qa-answer { background: #FFF6E1; padding: 10px 12px; border-radius: 10px; margin-top: 8px; font-size: 13px; color: #7A5A00; }
+  .qa-reply-row { margin-top: 10px; display: flex; gap: 8px; align-items: flex-start; }
+  .qa-reply-row textarea { flex: 1; min-height: 60px; }
+  .publish-form { padding: 16px; display: grid; gap: 12px; }
+  .publish-form label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .messages-list { padding: 8px 16px 16px; display: grid; gap: 12px; }
+  .message-item { padding: 12px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border); }
+  .message-item h3 { margin: 0 0 4px; font-size: 15px; font-family: 'Cormorant Garamond', Georgia, serif; }
+  .message-item p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+  .message-item .time { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 6px; display: block; }
+
+  /* Login */
+  .login-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFF6E1 0%, #F7F6F2 100%); }
+  .login-card { background: #fff; padding: 40px 32px; border-radius: 24px; box-shadow: 0 12px 40px rgba(26,26,26,.08); text-align: center; width: min(400px, 92vw); }
+  .login-brand { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 40px; letter-spacing: 8px; color: var(--ink); }
+  .login-sub { color: var(--muted); font-size: 12px; letter-spacing: 3px; margin-bottom: 24px; }
+  .login-title { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 26px; margin: 24px 0 8px; }
+  .login-desc { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  .login-btn { background: var(--brand); color: var(--brand-ink); border: 0; border-radius: 999px; padding: 14px 24px; font-size: 15px; font-weight: 700; cursor: pointer; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+  .login-btn .g { background: #fff; width: 24px; height: 24px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
+  .err { color: var(--error); font-size: 13px; margin-top: 12px; }
+  .tos { color: var(--muted); font-size: 11px; margin-top: 16px; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 12px 20px; border-radius: 999px; font-size: 13px; font-weight: 600; box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 1000; }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 720px) {
+    .app { flex-direction: column; }
+    .sidebar { width: 100%; flex-direction: row; overflow-x: auto; padding: 12px; gap: 4px; }
+    .brand, .brand-sub { display: none; }
+    .nav-btn { padding: 8px 12px; white-space: nowrap; }
+    .main { padding: 20px 16px; }
+    th, td { padding: 10px 12px; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="login" class="login-shell" style="display:none">
+  <div class="login-card">
+    <div class="login-brand">AATHMAN</div>
+    <div class="login-sub">ADMIN CONSOLE</div>
+    <div class="login-title">Namaste, Guruji</div>
+    <div class="login-desc">Sign in with your admin Google account to manage seekers, requests and messages.</div>
+    <button class="login-btn" id="google-signin">
+      <span class="g">G</span> Sign in with Google
+    </button>
+    <div id="login-err" class="err" style="display:none"></div>
+    <div class="tos">Only whitelisted admin emails can access this panel.</div>
+  </div>
+</div>
+
+<div id="app" class="app" style="display:none">
+  <aside class="sidebar">
+    <div class="brand">AATHMAN</div>
+    <div class="brand-sub">ADMIN</div>
+    <button class="nav-btn active" data-tab="users">👥 Users</button>
+    <button class="nav-btn" data-tab="sos">🆘 SOS Requests <span id="sos-badge" class="nav-badge" style="display:none">0</span></button>
+    <button class="nav-btn" data-tab="qa">💬 Q &amp; A <span id="qa-badge" class="nav-badge" style="display:none">0</span></button>
+    <button class="nav-btn" data-tab="guru">📜 Message from Guruji</button>
+    <div style="flex:1"></div>
+    <div class="brand-sub" style="margin: 0">v1.0</div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <h1 id="page-title">Users</h1>
+      <div style="display:flex; gap:12px; align-items:center">
+        <span class="who" id="who"></span>
+        <button class="logout" id="logout-btn">Sign out</button>
+      </div>
+    </div>
+
+    <!-- USERS -->
+    <section id="tab-users">
+      <div class="card">
+        <div class="toolbar">
+          <input class="search" id="user-search" placeholder="Search by name, email, or phone…" />
+          <button class="btn" id="user-refresh">Refresh</button>
+        </div>
+        <div id="users-body"></div>
+      </div>
+    </section>
+
+    <!-- SOS -->
+    <section id="tab-sos" style="display:none">
+      <div class="card">
+        <div class="toolbar">
+          <div style="color:var(--muted); font-size:13px">Mark each request as <b>pending</b> once picked up, then <b>resolved</b> after outreach.</div>
+          <button class="btn" id="sos-refresh" style="margin-left:auto">Refresh</button>
+        </div>
+        <div id="sos-body"></div>
+      </div>
+    </section>
+
+    <!-- QA -->
+    <section id="tab-qa" style="display:none">
+      <div class="card">
+        <div class="toolbar">
+          <label style="display:flex; gap:6px; align-items:center; font-size:13px; color:var(--muted); cursor:pointer;">
+            <input type="checkbox" id="qa-only-unanswered" /> Only unanswered
+          </label>
+          <button class="btn" id="qa-refresh" style="margin-left:auto">Refresh</button>
+        </div>
+        <div id="qa-body"></div>
+      </div>
+    </section>
+
+    <!-- GURU -->
+    <section id="tab-guru" style="display:none">
+      <div class="card">
+        <form class="publish-form" id="guru-form">
+          <label>Title</label>
+          <input class="txt" id="guru-title" placeholder="e.g. Rest in the space between thoughts" required />
+          <label>Message</label>
+          <textarea id="guru-body" placeholder="Guruji's wisdom for the day…" required></textarea>
+          <label>Cover image URL (optional)</label>
+          <input class="txt" id="guru-cover" placeholder="https://… (defaults to Guruji's portrait)" />
+          <div style="display:flex; gap:12px; align-items:center;">
+            <button class="btn brand" type="submit" id="guru-publish">Publish &amp; Send Push</button>
+            <span id="guru-status" style="font-size:12px; color:var(--muted);"></span>
+          </div>
+        </form>
+      </div>
+      <h2 style="font-family:'Cormorant Garamond', Georgia, serif; font-weight:700; margin: 24px 0 12px;">Recently Published</h2>
+      <div class="card">
+        <div class="messages-list" id="guru-list"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = (window.location.origin.replace(/\/$/, '')) + '/api';
+const TOKEN_KEY = 'aathman_admin_token';
+let TOKEN = localStorage.getItem(TOKEN_KEY);
+let ME = null;
+
+const $ = (id) => document.getElementById(id);
+const toast = (msg, ms=2200) => {
+  const el = $('toast'); el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), ms);
+};
+
+async function apiFetch(path, opts={}) {
+  const headers = Object.assign({'Content-Type':'application/json'}, opts.headers||{});
+  if (TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
+  const res = await fetch(API + path, Object.assign({}, opts, { headers }));
+  const text = await res.text();
+  let data = null; try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  if (!res.ok) throw new Error((data && data.detail) || ('HTTP ' + res.status));
+  return data;
+}
+
+function showLogin(errMsg) {
+  $('app').style.display = 'none';
+  $('login').style.display = 'flex';
+  if (errMsg) { $('login-err').textContent = errMsg; $('login-err').style.display = 'block'; }
+}
+
+function showApp() {
+  $('login').style.display = 'none';
+  $('app').style.display = 'flex';
+  $('who').textContent = ME ? (ME.name || ME.email) : '';
+}
+
+async function bootstrap() {
+  // 1) OAuth return: session_id in URL fragment
+  const hash = window.location.hash || '';
+  const sid = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash).get('session_id')
+           || new URL(window.location.href).searchParams.get('session_id');
+  if (sid) {
+    try {
+      const res = await apiFetch('/auth/emergent-session', { method: 'POST', body: JSON.stringify({ session_id: sid }) });
+      TOKEN = res.token; localStorage.setItem(TOKEN_KEY, TOKEN);
+      window.history.replaceState(null, '', window.location.pathname);
+    } catch (e) { return showLogin(e.message); }
+  }
+  if (!TOKEN) return showLogin();
+  try {
+    ME = await apiFetch('/admin/whoami');
+    showApp();
+    switchTab('users');
+    refreshBadges();
+  } catch (e) {
+    localStorage.removeItem(TOKEN_KEY); TOKEN = null;
+    showLogin(e.message.includes('403') || e.message.includes('Admin') ? 'This Google account is not an admin. Add your email to ADMIN_EMAILS in the backend .env.' : (e.message || 'Session expired.'));
+  }
+}
+
+$('google-signin').onclick = () => {
+  const redirect = window.location.origin + '/api/admin-panel/';
+  window.location.href = 'https://auth.emergentagent.com/?redirect=' + encodeURIComponent(redirect);
+};
+$('logout-btn').onclick = () => { localStorage.removeItem(TOKEN_KEY); TOKEN = null; showLogin(); };
+
+// Tabs
+document.querySelectorAll('.nav-btn').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+function switchTab(name) {
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  ['users','sos','qa','guru'].forEach(t => $('tab-' + t).style.display = t === name ? 'block' : 'none');
+  $('page-title').textContent = ({users:'Users', sos:'SOS Requests', qa:'Q & A', guru:'Message from Guruji'})[name];
+  if (name === 'users') loadUsers();
+  if (name === 'sos') loadSos();
+  if (name === 'qa') loadQa();
+  if (name === 'guru') loadGuru();
+}
+
+// Users
+$('user-refresh').onclick = () => loadUsers();
+$('user-search').addEventListener('input', debounce(() => loadUsers(), 300));
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+async function loadUsers() {
+  const q = $('user-search').value.trim();
+  $('users-body').innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const rows = await apiFetch('/admin/users' + (q ? '?q=' + encodeURIComponent(q) : ''));
+    if (!rows.length) return $('users-body').innerHTML = '<div class="empty">No users found.</div>';
+    $('users-body').innerHTML = renderTable(
+      ['Name','Contact','Login','Signup','State'],
+      rows.map(u => [
+        `<b>${escapeHtml(u.name || 'Seeker')}</b>${u.gender ? `<div style="font-size:11px;color:var(--muted)">${escapeHtml(u.gender)}${u.age ? ' · ' + u.age : ''}</div>` : ''}`,
+        `<div>${escapeHtml(u.email || u.phone || u.identifier)}</div>`,
+        `<span class="pill ${u.method === 'google' ? 'google' : u.method === 'phone' ? 'phone' : 'email'}">${escapeHtml((u.method || 'email').toUpperCase())}</span>`,
+        u.created_at ? new Date(u.created_at).toLocaleDateString() : '—',
+        `${escapeHtml(u.state || '—')}<div style="font-size:11px;color:var(--muted)">${escapeHtml(u.nationality || '')}</div>`
+      ])
+    );
+  } catch (e) { $('users-body').innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
+// SOS
+$('sos-refresh').onclick = () => loadSos();
+async function loadSos() {
+  $('sos-body').innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const rows = await apiFetch('/admin/sos');
+    if (!rows.length) return $('sos-body').innerHTML = '<div class="empty">No SOS requests yet.</div>';
+    $('sos-body').innerHTML = renderTable(
+      ['User','Contact','Feeling','Note','Received','Status',''],
+      rows.map(r => [
+        `<b>${escapeHtml(r.name)}</b>`,
+        escapeHtml(r.phone),
+        `<span class="pill queued">${escapeHtml(r.feeling)}</span>`,
+        `<div style="max-width:280px; font-size:13px; color:var(--muted)">${escapeHtml(r.note || '—')}</div>`,
+        r.created_at ? new Date(r.created_at).toLocaleString() : '—',
+        `<span class="pill ${r.status || 'queued'}">${escapeHtml((r.status || 'queued').toUpperCase())}</span>`,
+        `<div style="display:flex; gap:6px">
+           <button class="btn ghost" onclick="updateSos('${r.id}','pending')">Pending</button>
+           <button class="btn brand" onclick="updateSos('${r.id}','resolved')">Resolve</button>
+         </div>`
+      ])
+    );
+  } catch (e) { $('sos-body').innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+window.updateSos = async (id, status) => {
+  try { await apiFetch('/admin/sos/' + id, { method: 'PUT', body: JSON.stringify({ status }) }); toast('Updated'); loadSos(); refreshBadges(); }
+  catch (e) { toast(e.message); }
+};
+
+// QA
+$('qa-refresh').onclick = () => loadQa();
+$('qa-only-unanswered').onchange = () => loadQa();
+async function loadQa() {
+  const only = $('qa-only-unanswered').checked;
+  $('qa-body').innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const rows = await apiFetch('/admin/qa' + (only ? '?only_unanswered=true' : ''));
+    if (!rows.length) return $('qa-body').innerHTML = '<div class="empty">No questions.</div>';
+    $('qa-body').innerHTML = '<div style="padding:8px 16px 16px">' + rows.map(r => `
+      <div style="padding: 16px; border-bottom: 1px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;">
+          <div><b style="font-family:'Cormorant Garamond', Georgia, serif; font-size:17px">Q.</b> ${escapeHtml(r.question)}</div>
+          <div style="font-size:11px; color:var(--muted); white-space:nowrap">${r.created_at ? new Date(r.created_at).toLocaleDateString() : ''}</div>
+        </div>
+        <div style="color:var(--muted); font-size:12px; margin-top:4px">— ${escapeHtml(r.user_name || 'Seeker')}</div>
+        ${r.answer ? `<div class="qa-answer">${escapeHtml(r.answer)}</div>` : `
+          <div class="qa-reply-row">
+            <textarea id="reply-${r.id}" placeholder="Type Guruji's answer…"></textarea>
+            <button class="btn brand" onclick="replyQa('${r.id}')">Reply</button>
+          </div>`
+        }
+      </div>`).join('') + '</div>';
+  } catch (e) { $('qa-body').innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+window.replyQa = async (id) => {
+  const ta = document.getElementById('reply-' + id);
+  const answer = (ta.value || '').trim();
+  if (!answer) return toast('Type a reply first.');
+  try { await apiFetch('/admin/qa/' + id + '/reply', { method: 'POST', body: JSON.stringify({ answer }) }); toast('Reply sent 🙏'); loadQa(); refreshBadges(); }
+  catch (e) { toast(e.message); }
+};
+
+// GURU MESSAGE
+$('guru-form').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const title = $('guru-title').value.trim();
+  const body = $('guru-body').value.trim();
+  const cover = $('guru-cover').value.trim() || null;
+  if (!title || !body) return;
+  const btn = $('guru-publish'); btn.disabled = true; btn.textContent = 'Publishing…';
+  $('guru-status').textContent = '';
+  try {
+    const res = await apiFetch('/admin/guru-messages', { method: 'POST', body: JSON.stringify({ title, body, cover }) });
+    toast(`Published · push sent to ${res.push_sent_to} users`);
+    $('guru-title').value = ''; $('guru-body').value = ''; $('guru-cover').value = '';
+    loadGuru();
+  } catch (e) { toast(e.message); $('guru-status').textContent = e.message; }
+  btn.disabled = false; btn.textContent = 'Publish & Send Push';
+};
+async function loadGuru() {
+  $('guru-list').innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const rows = await apiFetch('/guru/messages');
+    if (!rows.length) return $('guru-list').innerHTML = '<div class="empty">No messages yet.</div>';
+    $('guru-list').innerHTML = rows.map(m => `
+      <div class="message-item">
+        <h3>${escapeHtml(m.title)}</h3>
+        <p>${escapeHtml(m.body)}</p>
+        <span class="time">${m.published_at ? new Date(m.published_at).toLocaleString() : ''}</span>
+      </div>`).join('');
+  } catch (e) { $('guru-list').innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
+async function refreshBadges() {
+  try {
+    const sos = await apiFetch('/admin/sos');
+    const pending = sos.filter(s => (s.status || 'queued') !== 'resolved').length;
+    const b = $('sos-badge'); if (pending > 0) { b.textContent = pending; b.style.display = 'inline-block'; } else b.style.display = 'none';
+  } catch {}
+  try {
+    const qa = await apiFetch('/admin/qa?only_unanswered=true');
+    const b = $('qa-badge'); if (qa.length > 0) { b.textContent = qa.length; b.style.display = 'inline-block'; } else b.style.display = 'none';
+  } catch {}
+}
+
+// Helpers
+function renderTable(headers, rows) {
+  return `<table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${
+    rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')
+  }</tbody></table>`;
+}
+function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+bootstrap();
+</script>
+</body>
+</html>

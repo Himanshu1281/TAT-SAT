@@ -2,9 +2,24 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import * as Notifications from 'expo-notifications';
 import { api, loadToken, setToken } from '../api/client';
 
 WebBrowser.maybeCompleteAuthSession();
+
+async function registerForPush(userId: string) {
+  if (Platform.OS === 'web') return;
+  try {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') return;
+    const tokenResp = await Notifications.getDevicePushTokenAsync();
+    await api.post('/register-push', {
+      user_id: userId,
+      platform: Platform.OS,
+      device_token: tokenResp.data,
+    });
+  } catch { /* silent — push is best-effort */ }
+}
 
 type User = {
   id: string;
@@ -56,6 +71,7 @@ function extractSessionId(url: string | null | undefined): string | null {
 async function exchangeSession(sessionId: string) {
   const res = await api.post('/auth/emergent-session', { session_id: sessionId });
   await setToken(res.token);
+  if (res.user?.id) registerForPush(res.user.id);
   return res;
 }
 
@@ -69,6 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!t) { setUser(null); return; }
       const me = await api.get('/auth/me');
       setUser(me);
+      if (me?.id) registerForPush(me.id);
     } catch {
       await setToken(null);
       setUser(null);

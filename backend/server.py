@@ -11,7 +11,7 @@ import hmac
 import hashlib
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 import jwt as pyjwt
@@ -37,6 +37,10 @@ OTP_DEV_MODE = os.environ.get('OTP_DEV_MODE', 'true').lower() == 'true'
 
 RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', '')
 RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', '')
+
+ADMIN_EMAILS = {e.strip().lower() for e in os.environ.get('ADMIN_EMAILS', '').split(',') if e.strip()}
+EMERGENT_PUSH_KEY = os.environ.get('EMERGENT_PUSH_KEY', 'placeholder')
+EMERGENT_PUSH_BASE_URL = 'https://integrations.emergentagent.com'
 
 app = FastAPI(title="Aathman API")
 api = APIRouter(prefix="/api")
@@ -1064,6 +1068,196 @@ async def community_info():
     }
 
 
+# ------------ Admin & Push ------------
+def is_admin_user(user: dict) -> bool:
+    email = (user.get("email") or "").strip().lower()
+    return bool(email) and email in ADMIN_EMAILS
+
+
+async def require_admin(user: dict = Depends(get_current_user)) -> dict:
+    if not is_admin_user(user):
+        raise HTTPException(403, "Admin access required")
+    return user
+
+
+@api.get("/admin/whoami")
+async def admin_whoami(user: dict = Depends(require_admin)):
+    return {"ok": True, "email": user.get("email"), "name": user.get("name")}
+
+
+@api.get("/admin/users")
+async def admin_users(q: Optional[str] = None, admin: dict = Depends(require_admin)):
+    query: dict = {}
+    if q:
+        rx = {"$regex": q, "$options": "i"}
+        query["$or"] = [{"name": rx}, {"email": rx}, {"phone": rx}, {"identifier": rx}]
+    rows = await db.users.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    for r in rows:
+        if isinstance(r.get("created_at"), datetime):
+            r["created_at"] = iso(r["created_at"])
+        if r.get("last_active_date") and isinstance(r["last_active_date"], datetime):
+            r["last_active_date"] = iso(r["last_active_date"])
+    return rows
+
+
+@api.get("/admin/sos")
+async def admin_sos_list(admin: dict = Depends(require_admin)):
+    rows = await db.sos.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    for r in rows:
+        if isinstance(r.get("created_at"), datetime):
+            r["created_at"] = iso(r["created_at"])
+    return rows
+
+
+class SosStatusBody(BaseModel):
+    status: Literal["queued", "pending", "resolved"]
+
+
+@api.put("/admin/sos/{req_id}")
+async def admin_sos_update(req_id: str, body: SosStatusBody, admin: dict = Depends(require_admin)):
+    res = await db.sos.update_one({"id": req_id}, {"$set": {"status": body.status, "updated_at": now_utc()}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "SOS request not found")
+    return {"ok": True}
+
+
+@api.get("/admin/qa")
+async def admin_qa_list(only_unanswered: bool = False, admin: dict = Depends(require_admin)):
+    q: dict = {}
+    if only_unanswered:
+        q["$or"] = [{"answer": None}, {"answer": ""}]
+    rows = await db.qa.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    for r in rows:
+        if isinstance(r.get("created_at"), datetime):
+            r["created_at"] = iso(r["created_at"])
+    return rows
+
+
+class QaReplyBody(BaseModel):
+    answer: str
+
+
+@api.post("/admin/qa/{qa_id}/reply")
+async def admin_qa_reply(qa_id: str, body: QaReplyBody, admin: dict = Depends(require_admin)):
+    entry = await db.qa.find_one({"id": qa_id}, {"_id": 0})
+    if not entry:
+        raise HTTPException(404, "Question not found")
+    await db.qa.update_one({"id": qa_id}, {"$set": {"answer": body.answer, "answered_at": now_utc(), "answered_by": admin.get("email")}})
+    # Push the seeker who asked
+    try:
+        recipients = [entry["user_id"]] if entry.get("user_id") and entry["user_id"] != "seed" else []
+        if recipients:
+            await send_push(
+                recipients=recipients,
+                data={"title": "Guruji answered your question 🙏", "message": (body.answer or "")[:120], "action_url": "/qa"},
+            )
+    except Exception as e:
+        logger.warning(f"Push (qa reply) failed: {e}")
+    return {"ok": True}
+
+
+class GuruMessageBody(BaseModel):
+    title: str
+    body: str
+    cover: Optional[str] = None
+
+
+@api.post("/admin/guru-messages")
+async def admin_publish_guru(body: GuruMessageBody, admin: dict = Depends(require_admin)):
+    doc = {
+        "id": new_id(),
+        "title": body.title,
+        "body": body.body,
+        "author": "HH Guruji Sundar",
+        "cover": body.cover or GURUJI_IMAGE_LEGACY,
+        "published_at": now_utc(),
+    }
+    await db.guru_messages.insert_one(doc.copy())
+    # Broadcast push to all registered users (chunk 100)
+    all_ids = [u["id"] async for u in db.users.find({}, {"id": 1, "_id": 0})]
+    sent = 0
+    for i in range(0, len(all_ids), 100):
+        chunk = all_ids[i:i + 100]
+        try:
+            await send_push(
+                recipients=chunk,
+                data={
+                    "title": f"Message from Guruji: {body.title}",
+                    "message": (body.body or "")[:140],
+                    "action_url": "/guru-messages",
+                },
+                idempotency_key=f"guru-{doc['id']}-{i}",
+            )
+            sent += len(chunk)
+        except Exception as e:
+            logger.warning(f"Push broadcast chunk {i} failed: {e}")
+    doc["published_at"] = iso(doc["published_at"])
+    return {"ok": True, "message": doc, "push_sent_to": sent}
+
+
+# --- Push relay ---
+_push_client: Optional[Any] = None
+
+
+def _push_http():
+    global _push_client
+    if _push_client is None:
+        import httpx as _h
+        _push_client = _h.AsyncClient(
+            base_url=EMERGENT_PUSH_BASE_URL,
+            headers={"X-Push-Key": EMERGENT_PUSH_KEY},
+            timeout=10.0,
+        )
+    return _push_client
+
+
+class RegisterPushBody(BaseModel):
+    user_id: str
+    platform: str
+    device_token: str
+
+
+@api.post("/register-push", status_code=201)
+async def register_push(body: RegisterPushBody):
+    if EMERGENT_PUSH_KEY == "placeholder":
+        # Preview mode — accept silently so client flow works during development
+        return {"status": "registered", "mode": "preview"}
+    try:
+        resp = await _push_http().post("/api/v1/push/users/register", json=body.model_dump())
+        if resp.status_code == 401:
+            raise HTTPException(500, "EMERGENT_PUSH_KEY missing or invalid")
+        if resp.status_code >= 500:
+            raise HTTPException(502, "Push provider unavailable")
+        resp.raise_for_status()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"register-push relay failed: {e}")
+        raise HTTPException(502, "Push provider unavailable")
+    return {"status": "registered"}
+
+
+async def send_push(recipients: list, data: dict, idempotency_key: Optional[str] = None) -> None:
+    if EMERGENT_PUSH_KEY == "placeholder":
+        logger.info(f"[PREVIEW] would push to {len(recipients)} recipients: {data.get('title')}")
+        return
+    if not recipients:
+        return
+    if len(recipients) > 100:
+        raise ValueError("max 100 recipients per /trigger call; chunk before sending")
+    if "title" not in data or "message" not in data:
+        raise ValueError("data must include title and message")
+    payload: dict = {"recipients": recipients, "data": data}
+    if idempotency_key:
+        payload["$idempotency_key"] = idempotency_key
+    resp = await _push_http().post("/api/v1/push/trigger", json=payload)
+    if resp.status_code == 401:
+        raise HTTPException(500, "EMERGENT_PUSH_KEY missing or invalid")
+    if resp.status_code >= 500:
+        raise HTTPException(502, "Push provider unavailable")
+    resp.raise_for_status()
+
+
 # ------------ Root ------------
 @api.get("/")
 async def root():
@@ -1288,6 +1482,13 @@ async def on_startup():
 
 
 app.include_router(api)
+
+# Serve the admin dashboard (separate web-only single-page HTML) under /api/*
+# so the ingress routes it to the backend (all other paths go to Expo).
+from fastapi.staticfiles import StaticFiles
+_admin_dir = Path(__file__).parent / "admin_static"
+if _admin_dir.exists():
+    app.mount("/api/admin-panel", StaticFiles(directory=str(_admin_dir), html=True), name="admin")
 
 app.add_middleware(
     CORSMiddleware,
