@@ -107,12 +107,24 @@ A niche spiritual wellness mobile app for the Indian audience, inspired by Calm 
 See `/app/memory/test_credentials.md` — DEV OTP is returned inline in the `/api/auth/send-otp` response.
 
 ## Backend Test Report
-28/28 tests passing (`/app/test_reports/pytest/pytest_results.xml`).
+93/93 tests passing after Iteration 7 (`/app/test_reports/pytest/pytest_results.xml`, `/app/test_reports/iteration_7.json`). Iteration 7 covered the new Admin Panel & push-relay endpoints.
+
+## MVP Web Admin Panel
+- Served at `/api/admin-panel/` (FastAPI StaticFiles + inline JS SPA at `/app/backend/admin_static/index.html`).
+- Auth: Same Emergent Google Sign-In flow as the mobile app **plus** email whitelist from `ADMIN_EMAILS` env var.
+- Sections: Users (search), SOS Requests (queued/pending/resolved), Q & A (view questions → reply), Message from Guruji (publish + broadcast push).
+- All endpoints protected by `require_admin` dependency.
+
+## Push Notifications
+- `expo-notifications` on client (`app/_layout.tsx` sets handler, Android channel, and handles warm + cold-start taps).
+- Register endpoint `POST /api/register-push` (JWT protected, enforces `body.user_id == current_user.id`).
+- Guru-message publish and Q&A reply both call `send_push` via Emergent Push (SuprSend relay). Backend degrades gracefully to `[PREVIEW]` log in dev (when `EMERGENT_PUSH_KEY=placeholder`).
+- Deep-link on tap: `data.action_url` → `router.push` (routes: `/qa`, `/guru-messages`).
+- **Requires production build** + `google-services.json` (Android) + APNs cert (iOS) for real delivery; will not work in Expo Go.
 
 ## Deferred / Future
 - Real SendGrid email delivery (drop-in when user provides API key)
 - Real Razorpay checkout via React Native Web/native SDK
 - Real live streaming (currently YouTube-embedded proxies)
 - Twilio Voice for real SOS callback
-- Audio playback for meditations/sleep music (currently visual player w/ haptic bell)
-- Push notifications for satsang reminders
+- server.py router split (currently 1500+ lines — non-blocking refactor)

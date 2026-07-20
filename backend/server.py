@@ -6,6 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import random
+import re
 import string
 import hmac
 import hashlib
@@ -1089,7 +1090,7 @@ async def admin_whoami(user: dict = Depends(require_admin)):
 async def admin_users(q: Optional[str] = None, admin: dict = Depends(require_admin)):
     query: dict = {}
     if q:
-        rx = {"$regex": q, "$options": "i"}
+        rx = {"$regex": re.escape(q), "$options": "i"}
         query["$or"] = [{"name": rx}, {"email": rx}, {"phone": rx}, {"identifier": rx}]
     rows = await db.users.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     for r in rows:
@@ -1218,7 +1219,10 @@ class RegisterPushBody(BaseModel):
 
 
 @api.post("/register-push", status_code=201)
-async def register_push(body: RegisterPushBody):
+async def register_push(body: RegisterPushBody, user: dict = Depends(get_current_user)):
+    # A user can only register a push token for their own account
+    if body.user_id != user["id"]:
+        raise HTTPException(403, "user_id mismatch")
     if EMERGENT_PUSH_KEY == "placeholder":
         # Preview mode — accept silently so client flow works during development
         return {"status": "registered", "mode": "preview"}
