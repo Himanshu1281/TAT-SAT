@@ -85,7 +85,7 @@ export default function SOS() {
             <Pressable testID="sos-submit" onPress={submit} disabled={submitting || !name || !phone || !feeling} style={[styles.cta, (submitting || !name || !phone || !feeling) && { opacity: 0.5 }]}>
               {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>Request Counselling</Text>}
             </Pressable>
-            <Text style={styles.helper}>If you are in immediate danger, please call iCall 9152987821 or your local emergency number.</Text>
+            <Text style={styles.helper}>Disclaimer — SOS is a support request by choice, not an emergency service. If you are at immediate risk of harming yourself or others, please contact emergency services (112) or visit the nearest hospital immediately.</Text>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
