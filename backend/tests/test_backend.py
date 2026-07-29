@@ -321,12 +321,13 @@ GURUJI_IMAGE = "https://customer-assets.emergentagent.com/job_mantra-connect-3/a
 
 
 class TestMusic:
-    def test_music_list_has_at_least_10_tracks(self, api_client, base_url):
+    def test_music_list_has_four_tracks(self, api_client, base_url):
+        # Music library was rescoped in iteration 7 to the 4 uploaded MP3s
         r = api_client.get(f"{base_url}/api/music")
         assert r.status_code == 200
         rows = r.json()
         assert isinstance(rows, list)
-        assert len(rows) >= 10, f"expected >=10 tracks got {len(rows)}"
+        assert len(rows) == 4, f"expected exactly 4 tracks got {len(rows)}"
 
     def test_music_track_shape(self, api_client, base_url):
         rows = api_client.get(f"{base_url}/api/music").json()

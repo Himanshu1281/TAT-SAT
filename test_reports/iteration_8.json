@@ -1,0 +1,64 @@
+{
+  "summary": "Backend-only iteration 8. Deployment readiness verification after JWT_SECRET hardening (server.py now raises RuntimeError if unset/placeholder), android.googleServicesFile removal from app.json, and .gitignore un-ignoring .env. Backend booted cleanly (uptime confirmed via supervisorctl; GET /api/ returns 'Aathman API is awake'), meaning the .env JWT_SECRET is a valid non-placeholder value. All 10 iteration-8 smoke tests pass on the public preview URL: root endpoint, OTP send/verify -> JWT -> /auth/me round-trip (proves JWT secret round-trips), /api/music returns exactly 4 MP3 tracks with expected titles, /api/guru/messages returns >=3 seeded messages, /api/sos/request accepts submission returning status='queued', /api/register-push in preview mode returns 201 {status:'registered', mode:'preview'} for authenticated own-id submission and 403 for user_id mismatch, admin whoami/users/qa full reply flow (seeker posts Q -> admin sees in /admin/qa -> POST /admin/qa/{id}/reply -> public /api/qa now shows the answer). Full regression: 102/103 tests pass; one pre-existing failure in /api/rank leaderboard (data accumulation - 181 seed test users push a fresh 0-point user out of the top-50 cap) is unrelated to the 3 deployment fixes. Two stale tests fixed (music expected >=10 tracks -> now 4; /register-push tests updated to include auth headers since endpoint now requires auth per iter-7 recommendation). MOCKED: Emergent Push relay (EMERGENT_PUSH_KEY=placeholder) — /api/register-push short-circuits to {mode:'preview'} without hitting SuprSend, exactly as designed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/rank", "issue": "Pre-existing flake: 181 accumulated TEST_ users all with nationality='India' fill the top-50 leaderboard so a freshly-created 0-point user is truncated out. Spec says 'self always included' but the current implementation sorts by points desc then slices rows[:50] — self isn't guaranteed to be in the returned set. Fix: always ensure the requesting user's row is appended to leaderboard (or bump into top-50) even if their points rank them lower than 50th. Not a regression from the deployment fixes."},
+      {"endpoint": "server.py collection cleanup", "issue": "db.users has grown to 181 rows from repeated test-run accumulation. Not a bug per se but tests should clean up TEST_ users, or a small admin/dev endpoint to purge TEST_* identifiers between suites would keep the rank test deterministic."},
+      {"endpoint": "(Carried from iter 7) POST /api/register-push", "issue": "RESOLVED — endpoint now requires Depends(get_current_user) and enforces body.user_id == user['id'] (returns 403 otherwise). Verified in test_register_push_user_id_mismatch_forbidden."},
+      {"endpoint": "(Carried) server.py structure", "issue": "1514 lines — router split (auth/points/content/commerce/community/live/admin/push) still overdue."},
+      {"endpoint": "(Carried) GET /api/admin/users", "issue": "Search regex still not re.escape()'d; response still leaks identifier+method+phone."},
+      {"endpoint": "(Carried) PUT /api/admin/sos/{req_id}", "issue": "Status transition still permits downgrading resolved -> queued."},
+      {"endpoint": "(Carried) POST /api/admin/guru-messages", "issue": "GURUJI_IMAGE_LEGACY constant still forward-referenced (defined at line 1276, used at line 1175). Cosmetic."},
+      {"endpoint": "(Carried) POST /api/auth/send-otp", "issue": "dev_otp is returned whenever SendGrid send fails, not strictly when OTP_DEV_MODE=true (line 220: 'if OTP_DEV_MODE or not sent')."},
+      {"endpoint": "(Carried) PUT /api/profile", "issue": "Uses Pydantic v1 body.dict() — migrate to body.model_dump(exclude_none=True)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/test_iteration4.py",
+    "/app/backend/tests/test_iteration5.py",
+    "/app/backend/tests/test_iteration6.py",
+    "/app/backend/tests/test_iteration7.py",
+    "/app/backend/tests/test_iteration8.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/pytest/pytest_iter8_results.xml"
+  ],
+  "action_items": [
+    "None blocking for this deployment iteration — all 3 deployment-readiness fixes verified regression-free.",
+    "(New) /api/rank: append self to leaderboard even when their point-total ranks them below the 50-row cap, so 'self always included' semantics are preserved regardless of DB size.",
+    "(Housekeeping) Add a periodic cleanup or an admin endpoint to purge users with identifier matching /^test_/i so leaderboard/scope tests remain deterministic across many CI runs.",
+    "(Carry-over polish, non-blocking) re.escape() admin /users search, curate the /admin/users projection, freeze allowed SOS transitions, hoist GURUJI_IMAGE_LEGACY, gate dev_otp strictly on OTP_DEV_MODE, split server.py into routers, migrate to Pydantic v2 model_dump."
+  ],
+  "critical_code_review_comments": [
+    "server.py:28-30 — JWT_SECRET hardening is correct: raises RuntimeError if unset or set to any of {'change-me','changeme','placeholder'}. Backend boots today because /app/backend/.env line 3 contains a real (non-placeholder) 30-char value.",
+    "server.py:1223-1230 — /register-push now correctly wraps get_current_user and forces body.user_id == user['id']; anonymous or cross-user submissions return 403. Preview short-circuit remains for EMERGENT_PUSH_KEY=='placeholder'.",
+    "server.py:1268-1270 — GET /api/ root endpoint returns {'message':'Aathman API is awake','time':<iso>}. Suitable for k8s liveness probes.",
+    "server.py:640-675 — /api/rank truncates rows[:50] AFTER sort by descending points. A freshly-created 0-point user is likely absent when the DB has >50 higher-point users in the same nationality. Business logic bug (report only).",
+    "server.py:1451-1490 — @app.on_event('startup') hooks are deprecated in FastAPI >=0.109 (should migrate to lifespan context manager). Cosmetic; behaviour unchanged.",
+    "server.py:1502-1508 — CORSMiddleware is added AFTER app.include_router(api). FastAPI applies middleware regardless of order, but style-wise middleware should be registered before routers.",
+    "server.py is now 1514 lines — router-split still overdue; every iteration adds another endpoint here."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration8.py (new — 10 smoke tests covering JWT boot, core endpoints, admin flow, register-push preview, SOS)",
+    "/app/backend/tests/test_backend.py (fixed stale music-count assertion: >=10 -> ==4 after iter-7 rescope)",
+    "/app/backend/tests/test_iteration7.py (fixed stale /register-push tests: now authenticate first + expect 401/403 for unauth, since endpoint was moved behind get_current_user)"
+  ],
+  "success_rate": {
+    "backend": "102/103 pytest (99.0%). Iteration-8 smoke: 10/10 (100%). One pre-existing failure in /api/rank unrelated to deployment fixes.",
+    "frontend": "not tested (backend only, per review_request.testing_type)"
+  },
+  "seed_data_creation": "No manual seed. Backend seeds meditations, 4 music tracks, sleep_content, live_sessions, guru_messages, quotes, Q&A, books at startup. Tests dynamically create per-run data via public endpoints and prefix identifiers with TEST_iter8_. Admin JWT is obtained through the same OTP dev-mode flow for admin@aathmanawarenesscentre.com (whitelisted in ADMIN_EMAILS env var).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Base URL: /app/frontend/.env EXPO_PUBLIC_BACKEND_URL (conftest.py already handles both EXPO_BACKEND_URL and EXPO_PUBLIC_BACKEND_URL). Run: pytest /app/backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml. JWT_SECRET must be set in /app/backend/.env to any non-placeholder value or backend will refuse to boot (see server.py:28-30). OTP dev-mode must remain enabled (OTP_DEV_MODE=true) — every test fixture depends on dev_otp being returned in the /api/auth/send-otp response. EMERGENT_PUSH_KEY=placeholder is intentional for preview; /api/register-push returns 201 {mode:'preview'} without hitting SuprSend. /api/register-push NOW REQUIRES AUTH (was anonymous in iter <=7). The /api/rank test in test_iteration3.py is flaky due to accumulated TEST_ users — main agent should either fix the endpoint to always include self, or add a cleanup step. Frontend intentionally skipped per review_request.testing_type='backend only(skip frontend)'.",
+  "rca_of_issue": "Only one non-blocking issue observed: TestRankPoints::test_rank_all_scopes_return_leaderboard fails because /api/rank returns rows[:50] AFTER sorting by descending points, and db.users has accumulated 181 nationality='India' test users from prior iterations. A fresh 0-point seeker is pushed out of the top-50 cap. Reproduce: create a fresh user via OTP, GET /api/rank?scope=national with their JWT, look for the user_id in leaderboard[] — currently absent. Mitigation: server.py:673 — after sorting, if 'user['id']' is not in rows[:50], append the seeker's own row (they always have a computed points object). Alternative: increase cap, or slice AFTER guaranteeing self is present."
+}

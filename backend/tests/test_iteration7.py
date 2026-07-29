@@ -278,12 +278,20 @@ def test_admin_guru_message_forbidden_for_non_admin(base_url):
 # ---------- /api/register-push ----------
 
 def test_register_push_preview_mode(base_url):
+    # /register-push now requires auth (iter-7 recommendation adopted). Grab a JWT first.
+    email = f"TEST_regpush_{uuid.uuid4().hex[:8]}@aathman.app"
+    token, user = _login(base_url, email)
     payload = {
-        "user_id": f"TEST_user_{uuid.uuid4().hex[:8]}",
+        "user_id": user["id"],
         "platform": "ios",
         "device_token": "TEST_devicetoken_" + uuid.uuid4().hex,
     }
-    r = requests.post(f"{base_url}/api/register-push", json=payload, timeout=10)
+    r = requests.post(
+        f"{base_url}/api/register-push",
+        headers={"Authorization": f"Bearer {token}"},
+        json=payload,
+        timeout=10,
+    )
     assert r.status_code == 201, f"{r.status_code} {r.text}"
     data = r.json()
     assert data.get("status") == "registered"
@@ -291,9 +299,9 @@ def test_register_push_preview_mode(base_url):
 
 
 def test_register_push_validation(base_url):
-    # Missing fields → 422
+    # With no auth header the endpoint must short-circuit at 401 before validation.
     r = requests.post(f"{base_url}/api/register-push", json={"user_id": "x"}, timeout=10)
-    assert r.status_code == 422
+    assert r.status_code in (401, 403)
 
 
 # ---------- Regression ----------
