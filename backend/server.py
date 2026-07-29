@@ -25,7 +25,9 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-JWT_SECRET = os.environ.get('JWT_SECRET', 'change-me')
+JWT_SECRET = os.environ.get('JWT_SECRET')
+if not JWT_SECRET or JWT_SECRET.lower() in {"change-me", "changeme", "placeholder"}:
+    raise RuntimeError("JWT_SECRET is required and must be set to a strong random value in the environment.")
 JWT_ALG = 'HS256'
 JWT_EXP_DAYS = 30
 

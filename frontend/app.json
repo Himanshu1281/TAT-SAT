@@ -18,8 +18,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.mantraconnect.vqvf8i",
-      "googleServicesFile": "./google-services.json"
+      "package": "com.emergent.mantraconnect.vqvf8i"
     },
     "web": {
       "bundler": "metro",

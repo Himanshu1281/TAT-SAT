@@ -80,9 +80,11 @@ memory/test_credentials.md
 
 # Mobile development
 android-sdk/
-.env
-.env.*
-*.env
+# NOTE: .env files are intentionally NOT ignored — Emergent deployment
+# requires .env files (EXPO_PUBLIC_* and backend runtime config) in the
+# app context. If you need to ignore local overrides, use .env.local instead.
+.env.local
+.env.local.*
 credentials.json
 *.key
 .credentials
