@@ -242,6 +242,9 @@ async def verify_otp(body: VerifyOtpBody):
     await db.otps.update_one({"id": doc["id"]}, {"$set": {"used": True}})
 
     user = await db.users.find_one({"identifier": identifier}, {"_id": 0})
+    # Google accounts sign in only via Google; OTP must never open them (OTP is returned in dev mode)
+    if user and user.get("method") == "google":
+        raise HTTPException(403, "This account uses Google sign-in")
     is_new = False
     if not user:
         is_new = True
