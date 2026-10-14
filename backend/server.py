@@ -36,12 +36,9 @@ GURUJI_IMAGE = "https://customer-assets.emergentagent.com/job_mantra-connect-3/a
 SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
 SENDGRID_FROM_EMAIL = os.environ.get('SENDGRID_FROM_EMAIL', 'noreply@aathman.app')
 SENDGRID_FROM_NAME = os.environ.get('SENDGRID_FROM_NAME', 'Aathman')
-# The app signs in with Google only. OTP login is for dev/testing (OTP_DEV_MODE=true) and the Play reviewer.
+# The app signs in with Google only. OTP login is for dev/testing only (OTP_DEV_MODE=true).
 OTP_DEV_MODE = os.environ.get('OTP_DEV_MODE', 'false').lower() == 'true'
 
-# Fixed-OTP login for the Google Play reviewer (App content -> App access). Only this one address bypasses email.
-REVIEW_LOGIN_EMAIL = os.environ.get('REVIEW_LOGIN_EMAIL', 'reviewer@itatsat.com').strip().lower()
-REVIEW_LOGIN_OTP = os.environ.get('REVIEW_LOGIN_OTP', '246810')
 RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', '')
 RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', '')
 
@@ -198,10 +195,9 @@ async def send_otp(body: SendOtpBody):
     identifier = body.identifier.strip().lower()
     if not identifier:
         raise HTTPException(400, "identifier required")
-    is_review = bool(REVIEW_LOGIN_EMAIL) and identifier == REVIEW_LOGIN_EMAIL
-    if not is_review and not OTP_DEV_MODE:
+    if not OTP_DEV_MODE:
         raise HTTPException(403, "Please sign in with Google")
-    otp = REVIEW_LOGIN_OTP if is_review else "".join(random.choices(string.digits, k=6))
+    otp = "".join(random.choices(string.digits, k=6))
     doc = {
         "id": new_id(),
         "identifier": identifier,
@@ -215,20 +211,16 @@ async def send_otp(body: SendOtpBody):
     await db.otps.update_many({"identifier": identifier, "used": False}, {"$set": {"used": True}})
     await db.otps.insert_one(doc)
     sent = False
-    if is_review:
-        sent = True  # reviewer already knows the fixed OTP; never email or echo it
-    elif body.method == "email":
+    if body.method == "email":
         sent = send_otp_email(identifier, otp)
-    resp = {"ok": True, "sent": sent, "method": body.method}
-    if not is_review and OTP_DEV_MODE:
-        resp["dev_otp"] = otp  # visible for dev/testing
-    return resp
+    # Only reachable in dev mode, so the OTP is returned for testing
+    return {"ok": True, "sent": sent, "method": body.method, "dev_otp": otp}
 
 
 @api.post("/auth/verify-otp")
 async def verify_otp(body: VerifyOtpBody):
     identifier = body.identifier.strip().lower()
-    if not OTP_DEV_MODE and identifier != REVIEW_LOGIN_EMAIL:
+    if not OTP_DEV_MODE:
         raise HTTPException(403, "Please sign in with Google")
     doc = await db.otps.find_one(
         {"identifier": identifier, "otp": body.otp, "used": False},
