@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import { api } from '@/src/api/client';
 import { colors, spacing, radius, fonts } from '@/src/theme';
 
-const CATS = ['All', 'Sleep', 'Anxiety', 'Focus'];
+const CATS = ['All', 'Sleep', 'Peace', 'Focus'];
 
 export default function MeditationTab() {
   const router = useRouter();

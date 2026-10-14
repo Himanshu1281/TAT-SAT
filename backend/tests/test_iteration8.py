@@ -12,7 +12,6 @@ Scope (per review_request):
   - Auth: send-otp + verify-otp dev-mode -> JWT -> /api/auth/me
   - Admin: whoami, users, qa list, qa reply, public /api/qa reflects the answer
   - Push relay preview short-circuit: POST /api/register-push -> 201, mode: 'preview'
-  - SOS: POST /api/sos/request
 """
 import os
 import uuid
@@ -93,29 +92,6 @@ class TestCorePublicEndpoints:
         for row in rows[:5]:
             assert "id" in row and "title" in row and "body" in row
             assert "_id" not in row
-
-
-# ---- SOS ------------------------------------------------------------------
-class TestSOS:
-
-    def test_sos_request_succeeds(self, api_client, base_url):
-        email = f"TEST_iter8_sos_{uuid.uuid4().hex[:8]}@aathman.app"
-        token, _ = _login(api_client, base_url, email)
-        r = api_client.post(
-            f"{base_url}/api/sos/request",
-            headers={"Authorization": f"Bearer {token}"},
-            json={
-                "name": "TEST iter8 seeker",
-                "phone": "+911234567890",
-                "feeling": "anxious",
-                "note": "iteration 8 smoke test",
-            },
-        )
-        assert r.status_code == 200, r.text
-        body = r.json()
-        assert body.get("ok") is True
-        assert "request" in body
-        assert body["request"]["status"] == "queued"
 
 
 # ---- Push relay preview mode ---------------------------------------------

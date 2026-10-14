@@ -93,7 +93,7 @@
         "empty": "N/A",
         "error": "Soft text: 'Take a deep breath. Let's try to reconnect.' with a retry button."
       },
-      "layout": "Header with 'AATHMAN' logo and SOS floating action button. Top section: Mood check-in emojis. Middle section: Daily Recommendations horizontal scroll. Bottom sections: Message from Guru card (image + text) and Quote of the Day. Use glass header. Safe area top."
+      "layout": "Header with 'AATHMAN' logo. Top section: Mood check-in emojis. Middle section: Daily Recommendations horizontal scroll. Bottom sections: Message from Guru card (image + text) and Quote of the Day. Use glass header. Safe area top."
     },
     {
       "name": "Meditation Library",
@@ -103,7 +103,7 @@
         "empty": "Illustration of meditating person.",
         "error": "Error message with retry button."
       },
-      "layout": "Categorized tabs (All, Sleep, Anxiety, Focus). Grid or list of meditation sessions. Each card has a background image with a vertical gradient scrim, title, and duration. Tapping opens Meditation Detail / Audio Player."
+      "layout": "Categorized tabs (All, Sleep, Peace, Focus). Grid or list of meditation sessions. Each card has a background image with a vertical gradient scrim, title, and duration. Tapping opens Meditation Detail / Audio Player."
     },
     {
       "name": "Dear Diary",
@@ -171,10 +171,10 @@
   },
   "instructions_to_main_agent": [
     "Ensure the Indian aesthetic is reflected through typography (Cormorant Garamond for displays) and the rich but calm color palette (Saffron, Purple, Teal on warm cream backgrounds).",
-    "Implement the 'Dear Diary' with a calendar view and the mood tracking bar chart (Calm/Happy/Grateful/Anxious) as requested.",
+    "Implement the 'Dear Diary' with a calendar view and the mood tracking bar chart (Calm/Happy/Grateful/Reflective/Blessed) as requested.",
     "The Mantra Jaap Counter must have a very large, prominent tap area with `haptics.mantra_counter_tap` mapped to it.",
     "Always use gradient scrims (bottom 30-40% dark) over images (like the meditation thumbnails or live satsang cards) to guarantee text readability.",
-    "Keep the SOS Depression button prominent on the Home screen or globally, potentially as a floating glass card or a sticky footer above the tab bar.",
+    "Do not add SOS, counselling, or mental-health features (removed for Google Play compliance).",
     "Do NOT use heavy shadows. Rely on spacing and subtle borders to separate content, matching the calm, airy feel of Headspace/Calm."
   ]
 }

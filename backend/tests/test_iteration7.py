@@ -3,7 +3,6 @@
 Scope:
 - /api/admin/whoami — 200 for admin, 403 for non-admin, 401 without token
 - /api/admin/users — list + search filter (?q=)
-- /api/admin/sos — list; PUT /api/admin/sos/{id} status update
 - /api/admin/qa — list; ?only_unanswered=true; POST /api/admin/qa/{id}/reply
 - POST /api/admin/guru-messages — publish + verify in /api/guru/messages
 - POST /api/register-push — preview short-circuit (EMERGENT_PUSH_KEY=placeholder)
@@ -110,62 +109,6 @@ def test_admin_users_forbidden_for_non_admin(base_url):
     r = requests.get(f"{base_url}/api/admin/users", headers=h, timeout=10)
     assert r.status_code == 403
 
-
-# ---------- /api/admin/sos ----------
-
-def test_admin_sos_list_and_status_update(base_url):
-    h_admin, _ = _admin_headers(base_url)
-    h_seeker, _, _ = _seeker_headers(base_url)
-
-    # Seeker creates SOS
-    r = requests.post(f"{base_url}/api/sos/request", headers=h_seeker, json={
-        "name": "TEST_Seeker",
-        "phone": "+911234567890",
-        "feeling": "anxious",
-        "note": "TEST_iteration7 sos"
-    }, timeout=10)
-    assert r.status_code == 200, r.text
-    sos_id = r.json()["request"]["id"]
-
-    # Admin lists SOS
-    r2 = requests.get(f"{base_url}/api/admin/sos", headers=h_admin, timeout=10)
-    assert r2.status_code == 200, r2.text
-    rows = r2.json()
-    assert isinstance(rows, list)
-    match = next((x for x in rows if x.get("id") == sos_id), None)
-    assert match is not None, f"created SOS not returned: {rows[:3]}"
-    assert match.get("status") == "queued"
-
-    # Update -> pending
-    r3 = requests.put(f"{base_url}/api/admin/sos/{sos_id}", headers=h_admin,
-                      json={"status": "pending"}, timeout=10)
-    assert r3.status_code == 200, r3.text
-    assert r3.json().get("ok") is True
-
-    # Update -> resolved
-    r4 = requests.put(f"{base_url}/api/admin/sos/{sos_id}", headers=h_admin,
-                      json={"status": "resolved"}, timeout=10)
-    assert r4.status_code == 200
-
-    # Verify persistence
-    r5 = requests.get(f"{base_url}/api/admin/sos", headers=h_admin, timeout=10)
-    rows = r5.json()
-    match = next((x for x in rows if x.get("id") == sos_id), None)
-    assert match is not None
-    assert match.get("status") == "resolved", f"status not persisted: {match}"
-
-
-def test_admin_sos_update_404(base_url):
-    h_admin, _ = _admin_headers(base_url)
-    r = requests.put(f"{base_url}/api/admin/sos/{uuid.uuid4().hex}", headers=h_admin,
-                     json={"status": "resolved"}, timeout=10)
-    assert r.status_code == 404
-
-
-def test_admin_sos_forbidden_for_non_admin(base_url):
-    h, _, _ = _seeker_headers(base_url)
-    r = requests.get(f"{base_url}/api/admin/sos", headers=h, timeout=10)
-    assert r.status_code == 403
 
 
 # ---------- /api/admin/qa ----------

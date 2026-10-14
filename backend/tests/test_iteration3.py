@@ -170,13 +170,13 @@ class TestMoodMonthly:
         # each item shape
         for it in data["series"]:
             assert "date" in it and "counts" in it
-            for k in ("calm", "happy", "grateful", "anxious", "sad"):
+            for k in ("calm", "happy", "grateful", "reflective", "blessed"):
                 assert k in it["counts"]
         # totals reflect
         assert data["totals"]["calm"] >= 2
         assert data["totals"]["happy"] >= 1
         # totals equal sum of series
-        for k in ("calm", "happy", "grateful", "anxious", "sad"):
+        for k in ("calm", "happy", "grateful", "reflective", "blessed"):
             assert data["totals"][k] == sum(s["counts"][k] for s in data["series"]), k
 
 

@@ -132,7 +132,6 @@
     <div class="brand">AATHMAN</div>
     <div class="brand-sub">ADMIN</div>
     <button class="nav-btn active" data-tab="users">👥 Users</button>
-    <button class="nav-btn" data-tab="sos">🆘 SOS Requests <span id="sos-badge" class="nav-badge" style="display:none">0</span></button>
     <button class="nav-btn" data-tab="qa">💬 Q &amp; A <span id="qa-badge" class="nav-badge" style="display:none">0</span></button>
     <button class="nav-btn" data-tab="guru">📜 Message from Guruji</button>
     <div style="flex:1"></div>
@@ -159,16 +158,6 @@
       </div>
     </section>
 
-    <!-- SOS -->
-    <section id="tab-sos" style="display:none">
-      <div class="card">
-        <div class="toolbar">
-          <div style="color:var(--muted); font-size:13px">Mark each request as <b>pending</b> once picked up, then <b>resolved</b> after outreach.</div>
-          <button class="btn" id="sos-refresh" style="margin-left:auto">Refresh</button>
-        </div>
-        <div id="sos-body"></div>
-      </div>
-    </section>
 
     <!-- QA -->
     <section id="tab-qa" style="display:none">
@@ -277,10 +266,9 @@ $('logout-btn').onclick = () => { localStorage.removeItem(TOKEN_KEY); TOKEN = nu
 document.querySelectorAll('.nav-btn').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 function switchTab(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-  ['users','sos','qa','guru'].forEach(t => $('tab-' + t).style.display = t === name ? 'block' : 'none');
-  $('page-title').textContent = ({users:'Users', sos:'SOS Requests', qa:'Q & A', guru:'Message from Guruji'})[name];
+  ['users','qa','guru'].forEach(t => $('tab-' + t).style.display = t === name ? 'block' : 'none');
+  $('page-title').textContent = ({users:'Users', qa:'Q & A', guru:'Message from Guruji'})[name];
   if (name === 'users') loadUsers();
-  if (name === 'sos') loadSos();
   if (name === 'qa') loadQa();
   if (name === 'guru') loadGuru();
 }
@@ -308,35 +296,6 @@ async function loadUsers() {
     );
   } catch (e) { $('users-body').innerHTML = `<div class="empty">${e.message}</div>`; }
 }
-
-// SOS
-$('sos-refresh').onclick = () => loadSos();
-async function loadSos() {
-  $('sos-body').innerHTML = '<div class="empty">Loading…</div>';
-  try {
-    const rows = await apiFetch('/admin/sos');
-    if (!rows.length) return $('sos-body').innerHTML = '<div class="empty">No SOS requests yet.</div>';
-    $('sos-body').innerHTML = renderTable(
-      ['User','Contact','Feeling','Note','Received','Status',''],
-      rows.map(r => [
-        `<b>${escapeHtml(r.name)}</b>`,
-        escapeHtml(r.phone),
-        `<span class="pill queued">${escapeHtml(r.feeling)}</span>`,
-        `<div style="max-width:280px; font-size:13px; color:var(--muted)">${escapeHtml(r.note || '—')}</div>`,
-        r.created_at ? new Date(r.created_at).toLocaleString() : '—',
-        `<span class="pill ${r.status || 'queued'}">${escapeHtml((r.status || 'queued').toUpperCase())}</span>`,
-        `<div style="display:flex; gap:6px">
-           <button class="btn ghost" onclick="updateSos('${r.id}','pending')">Pending</button>
-           <button class="btn brand" onclick="updateSos('${r.id}','resolved')">Resolve</button>
-         </div>`
-      ])
-    );
-  } catch (e) { $('sos-body').innerHTML = `<div class="empty">${e.message}</div>`; }
-}
-window.updateSos = async (id, status) => {
-  try { await apiFetch('/admin/sos/' + id, { method: 'PUT', body: JSON.stringify({ status }) }); toast('Updated'); loadSos(); refreshBadges(); }
-  catch (e) { toast(e.message); }
-};
 
 // QA
 $('qa-refresh').onclick = () => loadQa();
@@ -403,11 +362,6 @@ async function loadGuru() {
 }
 
 async function refreshBadges() {
-  try {
-    const sos = await apiFetch('/admin/sos');
-    const pending = sos.filter(s => (s.status || 'queued') !== 'resolved').length;
-    const b = $('sos-badge'); if (pending > 0) { b.textContent = pending; b.style.display = 'inline-block'; } else b.style.display = 'none';
-  } catch {}
   try {
     const qa = await apiFetch('/admin/qa?only_unanswered=true');
     const b = $('qa-badge'); if (qa.length > 0) { b.textContent = qa.length; b.style.display = 'inline-block'; } else b.style.display = 'none';

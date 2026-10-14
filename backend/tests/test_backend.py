@@ -294,19 +294,6 @@ class TestQA:
         assert all(x.get("answer") for x in rows)
 
 
-# ----------------- SOS -----------------
-class TestSOS:
-    def test_sos_request(self, api_client, base_url, auth_headers):
-        r = api_client.post(f"{base_url}/api/sos/request",
-                            json={"name": "TEST Seeker", "phone": "+919999999999",
-                                  "feeling": "anxious", "note": "need help"},
-                            headers=auth_headers)
-        assert r.status_code == 200
-        d = r.json()
-        assert d["ok"] is True
-        assert "teacher" in d["message"].lower() or "alone" in d["message"].lower()
-
-
 # ----------------- Sleep -----------------
 class TestSleep:
     def test_sleep_music(self, api_client, base_url):

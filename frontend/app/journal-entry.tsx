@@ -10,8 +10,8 @@ const MOODS = [
   { key: 'happy', emoji: '😊', label: 'Happy' },
   { key: 'calm', emoji: '😌', label: 'Calm' },
   { key: 'grateful', emoji: '🙏', label: 'Grateful' },
-  { key: 'anxious', emoji: '😟', label: 'Anxious' },
-  { key: 'sad', emoji: '😔', label: 'Sad' },
+  { key: 'reflective', emoji: '🪔', label: 'Reflective' },
+  { key: 'blessed', emoji: '✨', label: 'Blessed' },
 ];
 
 export default function JournalEntry() {

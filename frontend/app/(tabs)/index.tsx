@@ -14,8 +14,8 @@ const MOODS: { key: string; label: string; emoji: string; color: string }[] = [
   { key: 'happy', label: 'Happy', emoji: '😊', color: '#FFE8B8' },
   { key: 'calm', label: 'Calm', emoji: '😌', color: '#D9F5E9' },
   { key: 'grateful', label: 'Grateful', emoji: '🙏', color: '#EEE9FF' },
-  { key: 'anxious', label: 'Anxious', emoji: '😟', color: '#FEE4E2' },
-  { key: 'sad', label: 'Sad', emoji: '😔', color: '#E5E7EB' },
+  { key: 'reflective', label: 'Reflective', emoji: '🪔', color: '#FEE4E2' },
+  { key: 'blessed', label: 'Blessed', emoji: '✨', color: '#E5E7EB' },
 ];
 
 export default function Home() {
@@ -64,10 +64,6 @@ export default function Home() {
             <Text style={styles.greetingSm}>Namaste,</Text>
             <Text style={styles.greeting}>{first}</Text>
           </View>
-          <Pressable testID="sos-fab" style={styles.sosBtn} onPress={() => router.push('/sos')}>
-            <Ionicons name="alert-circle" size={16} color="#fff" />
-            <Text style={styles.sosText}>SOS</Text>
-          </Pressable>
         </View>
       </SafeAreaView>
 
@@ -190,8 +186,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   greetingSm: { color: colors.muted, fontSize: 13 },
   greeting: { fontFamily: fonts.display, fontSize: 28, color: colors.onSurface, fontWeight: '700' },
-  sosBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.error, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.pill },
-  sosText: { color: '#fff', fontWeight: '700', fontSize: 12, letterSpacing: 1 },
   moodCard: { marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border },
   h3: { fontSize: 16, fontWeight: '600', color: colors.onSurface },
   h2: { fontFamily: fonts.display, fontSize: 22, fontWeight: '700', color: colors.onSurface },

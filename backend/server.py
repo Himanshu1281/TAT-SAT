@@ -151,7 +151,7 @@ class DiaryEntry(BaseModel):
 
 
 class MoodBody(BaseModel):
-    mood: str  # calm, happy, grateful, anxious, sad
+    mood: str  # calm, happy, grateful, reflective, blessed
     kind: Literal["checkin", "checkout"] = "checkin"
     note: Optional[str] = ""
 
@@ -169,12 +169,6 @@ class MantraIncrementBody(BaseModel):
 class QAPost(BaseModel):
     question: str
 
-
-class SOSBody(BaseModel):
-    name: str
-    phone: str
-    feeling: str
-    note: Optional[str] = ""
 
 
 class CartItem(BaseModel):
@@ -462,7 +456,7 @@ async def mood_history(user: dict = Depends(get_current_user)):
 async def mood_weekly(user: dict = Depends(get_current_user)):
     since = now_utc() - timedelta(days=7)
     rows = await db.moods.find({"user_id": user["id"], "created_at": {"$gte": since}}, {"_id": 0}).to_list(500)
-    counts = {"calm": 0, "happy": 0, "grateful": 0, "anxious": 0, "sad": 0}
+    counts = {"calm": 0, "happy": 0, "grateful": 0, "reflective": 0, "blessed": 0}
     for r in rows:
         m = (r.get("mood") or "").lower()
         if m in counts:
@@ -486,7 +480,7 @@ async def mood_monthly(user: dict = Depends(get_current_user)):
             except Exception:
                 continue
         d = c.date().isoformat()
-        b = buckets.setdefault(d, {"calm": 0, "happy": 0, "grateful": 0, "anxious": 0, "sad": 0})
+        b = buckets.setdefault(d, {"calm": 0, "happy": 0, "grateful": 0, "reflective": 0, "blessed": 0})
         m = (r.get("mood") or "").lower()
         if m in b:
             b[m] += 1
@@ -495,8 +489,8 @@ async def mood_monthly(user: dict = Depends(get_current_user)):
     series = []
     for i in range(days - 1, -1, -1):
         d = (today - timedelta(days=i)).isoformat()
-        series.append({"date": d, "counts": buckets.get(d, {"calm": 0, "happy": 0, "grateful": 0, "anxious": 0, "sad": 0})})
-    totals = {"calm": 0, "happy": 0, "grateful": 0, "anxious": 0, "sad": 0}
+        series.append({"date": d, "counts": buckets.get(d, {"calm": 0, "happy": 0, "grateful": 0, "reflective": 0, "blessed": 0})})
+    totals = {"calm": 0, "happy": 0, "grateful": 0, "reflective": 0, "blessed": 0}
     for s in series:
         for k, v in s["counts"].items():
             totals[k] += v
@@ -961,24 +955,6 @@ async def sleep_content(kind: Optional[str] = None):
     return rows
 
 
-# ------------ SOS ------------
-@api.post("/sos/request")
-async def sos_request(body: SOSBody, user: dict = Depends(get_current_user)):
-    doc = {
-        "id": new_id(),
-        "user_id": user["id"],
-        "name": body.name,
-        "phone": body.phone,
-        "feeling": body.feeling,
-        "note": body.note or "",
-        "status": "queued",
-        "created_at": now_utc(),
-    }
-    await db.sos.insert_one(doc.copy())
-    doc["created_at"] = iso(doc["created_at"])
-    return {"ok": True, "message": "Our teacher will call you within 30 minutes. You are not alone.", "request": doc}
-
-
 # ------------ Music ------------
 @api.get("/music")
 async def list_music():
@@ -1101,27 +1077,6 @@ async def admin_users(q: Optional[str] = None, admin: dict = Depends(require_adm
         if r.get("last_active_date") and isinstance(r["last_active_date"], datetime):
             r["last_active_date"] = iso(r["last_active_date"])
     return rows
-
-
-@api.get("/admin/sos")
-async def admin_sos_list(admin: dict = Depends(require_admin)):
-    rows = await db.sos.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
-    for r in rows:
-        if isinstance(r.get("created_at"), datetime):
-            r["created_at"] = iso(r["created_at"])
-    return rows
-
-
-class SosStatusBody(BaseModel):
-    status: Literal["queued", "pending", "resolved"]
-
-
-@api.put("/admin/sos/{req_id}")
-async def admin_sos_update(req_id: str, body: SosStatusBody, admin: dict = Depends(require_admin)):
-    res = await db.sos.update_one({"id": req_id}, {"$set": {"status": body.status, "updated_at": now_utc()}})
-    if res.matched_count == 0:
-        raise HTTPException(404, "SOS request not found")
-    return {"ok": True}
 
 
 @api.get("/admin/qa")
@@ -1289,9 +1244,9 @@ async def seed_data():
             {"id": new_id(), "title": "Gratitude Meditation", "duration_minutes": 8, "category": "focus",
              "cover": "https://images.pexels.com/photos/10205915/pexels-photo-10205915.jpeg",
              "description": "Cultivate a heart of gratitude.", "bell_default": 0},
-            {"id": new_id(), "title": "Anxiety Relief Breath", "duration_minutes": 12, "category": "anxiety",
+            {"id": new_id(), "title": "Shanti Breath", "duration_minutes": 12, "category": "peace",
              "cover": "https://images.unsplash.com/photo-1608900203293-ebc770fac3f9",
-             "description": "Calm the storm within.", "bell_default": 300},
+             "description": "Rest in the stillness within.", "bell_default": 300},
             {"id": new_id(), "title": "Morning Awakening", "duration_minutes": 10, "category": "focus",
              "cover": GURUJI_IMAGE,
              "description": "Start your day with clarity.", "bell_default": 300},
@@ -1469,11 +1424,16 @@ async def on_startup():
     await db.live_sessions.update_many({"host": "Guruji Sundar"}, {"$set": {"cover": GURUJI_IMAGE}})
     await db.meditations.update_many({"title": "Morning Awakening"}, {"$set": {"cover": GURUJI_IMAGE}})
     # Migrate legacy bell_default values (were in odd small numbers) to seconds-based defaults
+    # Migration: devotional rename of the former anxiety session
+    await db.meditations.update_many(
+        {"title": "Anxiety Relief Breath"},
+        {"$set": {"title": "Shanti Breath", "category": "peace", "description": "Rest in the stillness within."}},
+    )
     bell_map = {
         "Inner Peace Meditation": 300,
         "Body Scan": 900,
         "Gratitude Meditation": 0,
-        "Anxiety Relief Breath": 300,
+        "Shanti Breath": 300,
         "Morning Awakening": 300,
         "Third Eye Focus": 900,
     }

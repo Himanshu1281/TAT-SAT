@@ -57,7 +57,6 @@ export default function ProfileTab() {
           <MenuItem icon="book-outline" label="Books & Magazines" onPress={() => router.push('/books')} testID="menu-books" />
           <MenuItem icon="chatbubble-ellipses-outline" label="Q & A" onPress={() => router.push('/qa')} testID="menu-qa" />
           <MenuItem icon="sparkles-outline" label="Message from Guruji" onPress={() => router.push('/guru-messages')} testID="menu-guru" />
-          <MenuItem icon="alert-circle-outline" label="SOS Counselling" onPress={() => router.push('/sos')} testID="menu-sos" danger />
         </View>
 
         <Pressable testID="logout-btn" onPress={logout} style={styles.logoutBtn}>

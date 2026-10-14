@@ -21,16 +21,15 @@ A niche spiritual wellness mobile app for the Indian audience, inspired by Calm 
 
 ### 3. Home Dashboard (Namaste + Guru's wisdom)
 - Personalised greeting
-- Mood check-in emojis (Happy / Calm / Grateful / Anxious / Sad)
+- Mood check-in emojis (Happy / Calm / Grateful / Reflective / Blessed)
 - Quick actions: Meditate, Mantra, Sleep, Stats
 - Daily meditation recommendations (horizontal cards)
 - Message from Guruji card
 - Quote of the Day (rotates daily, seeded)
 - Explore row: Books, Satsang, Q&A
-- Prominent **SOS** button (top-right red pill)
 
 ### 4. Guided Meditation
-- Library with categories: All / Sleep / Anxiety / Focus
+- Library with categories: All / Sleep / Peace / Focus
 - Full-screen dark player with cover image, progress bar
 - Duration selector (5/10/15/20/30 min)
 - **Bell interval** (Off / 30 / 60 / 120 / 300 s) - haptic bell rings during session
@@ -86,14 +85,11 @@ A niche spiritual wellness mobile app for the Indian audience, inspired by Calm 
 - Ask Guruji form
 - Recent answers feed (seeded 2 answers from Guruji)
 
-### 14. SOS Depression Counselling
-- Prominent SOS button on Home + Profile menu
-- Form: name, phone, feeling (Overwhelmed / Depressed / Anxious / Lonely / Suicidal / Other), optional note
-- **MOCKED** submission → success screen: "Our teacher will call you within 30 minutes. You are not alone."
-- Includes iCall helpline reference for real emergencies
+### 14. SOS — REMOVED
+- Removed for Google Play compliance: the app is devotional only, with no counselling, mental-health or therapeutic features. Do not re-add.
 
 ## Backend Data Models (MongoDB)
-`users, otps, diary, moods, meditations, sessions, mantras, live_sessions, books, orders, guru_messages, quotes, qa, sleep_content, sos`
+`users, otps, diary, moods, meditations, sessions, mantras, live_sessions, books, orders, guru_messages, quotes, qa, sleep_content`
 
 ## Environment Vars (backend/.env)
 - `MONGO_URL`, `DB_NAME=aathman_db`
@@ -112,7 +108,7 @@ See `/app/memory/test_credentials.md` — DEV OTP is returned inline in the `/ap
 ## MVP Web Admin Panel
 - Served at `/api/admin-panel/` (FastAPI StaticFiles + inline JS SPA at `/app/backend/admin_static/index.html`).
 - Auth: Same Emergent Google Sign-In flow as the mobile app **plus** email whitelist from `ADMIN_EMAILS` env var.
-- Sections: Users (search), SOS Requests (queued/pending/resolved), Q & A (view questions → reply), Message from Guruji (publish + broadcast push).
+- Sections: Users (search), Q & A (view questions → reply), Message from Guruji (publish + broadcast push).
 - All endpoints protected by `require_admin` dependency.
 
 ## Push Notifications
@@ -126,5 +122,4 @@ See `/app/memory/test_credentials.md` — DEV OTP is returned inline in the `/ap
 - Real SendGrid email delivery (drop-in when user provides API key)
 - Real Razorpay checkout via React Native Web/native SDK
 - Real live streaming (currently YouTube-embedded proxies)
-- Twilio Voice for real SOS callback
 - server.py router split (currently 1500+ lines — non-blocking refactor)

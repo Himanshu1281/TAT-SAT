@@ -19,8 +19,8 @@ const MOOD_META = [
   { key: 'calm', label: 'Calm', color: '#00BB84' },
   { key: 'happy', label: 'Happy', color: '#FFBA3D' },
   { key: 'grateful', label: 'Grateful', color: '#7861FF' },
-  { key: 'anxious', label: 'Anxious', color: '#F79009' },
-  { key: 'sad', label: 'Sad', color: '#98A2B3' },
+  { key: 'reflective', label: 'Reflective', color: '#F79009' },
+  { key: 'blessed', label: 'Blessed', color: '#98A2B3' },
 ];
 
 export default function Stats() {
@@ -29,8 +29,8 @@ export default function Stats() {
   const [stats, setStats] = useState<any>({ total_sessions: 0, total_minutes: 0, mantra_count: 0, streak: 0, points: 0, breakdown: { live: 0, meditation: 0, mantra: 0 }, live_attended: 0 });
   const [scope, setScope] = useState('national');
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
-  const [weekly, setWeekly] = useState<any>({ counts: { calm: 0, happy: 0, grateful: 0, anxious: 0, sad: 0 } });
-  const [monthly, setMonthly] = useState<any>({ series: [], totals: { calm: 0, happy: 0, grateful: 0, anxious: 0, sad: 0 } });
+  const [weekly, setWeekly] = useState<any>({ counts: { calm: 0, happy: 0, grateful: 0, reflective: 0, blessed: 0 } });
+  const [monthly, setMonthly] = useState<any>({ series: [], totals: { calm: 0, happy: 0, grateful: 0, reflective: 0, blessed: 0 } });
   const [loading, setLoading] = useState(false);
   const [range, setRange] = useState<'week' | 'month'>('week');
 

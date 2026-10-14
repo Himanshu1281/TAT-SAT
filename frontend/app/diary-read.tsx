@@ -6,8 +6,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '@/src/api/client';
 import { colors, spacing, radius, fonts } from '@/src/theme';
 
-const MOOD_EMOJI: Record<string, string> = { happy: '😊', calm: '😌', grateful: '🙏', anxious: '😟', sad: '😔' };
-const MOOD_LABEL: Record<string, string> = { happy: 'Happy', calm: 'Calm', grateful: 'Grateful', anxious: 'Anxious', sad: 'Sad' };
+const MOOD_EMOJI: Record<string, string> = { happy: '😊', calm: '😌', grateful: '🙏', reflective: '🪔', blessed: '✨' };
+const MOOD_LABEL: Record<string, string> = { happy: 'Happy', calm: 'Calm', grateful: 'Grateful', reflective: 'Reflective', blessed: 'Blessed' };
 
 export default function DiaryRead() {
   const { id } = useLocalSearchParams<{ id: string }>();

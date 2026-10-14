@@ -6,7 +6,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { api } from '@/src/api/client';
 import { colors, spacing, radius, fonts } from '@/src/theme';
 
-const MOOD_EMOJI: Record<string, string> = { happy: '😊', calm: '😌', grateful: '🙏', anxious: '😟', sad: '😔' };
+const MOOD_EMOJI: Record<string, string> = { happy: '😊', calm: '😌', grateful: '🙏', reflective: '🪔', blessed: '✨' };
 const CAL_DAYS = 30;
 
 function formatDate(d: Date): string {
