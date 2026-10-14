@@ -53,6 +53,8 @@ export default function DiaryTab() {
       const map: Record<string, number> = {};
       for (const d of dates) map[d.date] = d.count;
       setDatesWithEntries(map);
+    } catch {
+      // e.g. signed out while this tab was mounted; keep the current list
     } finally { setLoading(false); }
   }, []);
 

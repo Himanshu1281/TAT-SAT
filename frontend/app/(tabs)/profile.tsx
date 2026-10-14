@@ -18,11 +18,17 @@ export default function ProfileTab() {
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  // Leave the tabs after signing out so their screens stop calling authenticated APIs
+  const signOut = async () => {
+    await logout();
+    router.replace('/');
+  };
+
   const deleteAccount = () => {
     const doDelete = async () => {
       try {
         await api.del('/account');
-        await logout();
+        await signOut();
       } catch (e: any) {
         const msg = e?.message || 'Could not delete account. Please try again.';
         if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Error', msg);
@@ -84,7 +90,7 @@ ${body}`)) doDelete();
           <MenuItem icon="shield-checkmark-outline" label="Privacy Policy" onPress={() => Linking.openURL('https://itatsat.com/#privacy')} testID="menu-privacy" />
         </View>
 
-        <Pressable testID="logout-btn" onPress={logout} style={styles.logoutBtn}>
+        <Pressable testID="logout-btn" onPress={signOut} style={styles.logoutBtn}>
           <Ionicons name="log-out-outline" size={18} color={colors.error} />
           <Text style={styles.logoutText}>Sign out</Text>
         </Pressable>
