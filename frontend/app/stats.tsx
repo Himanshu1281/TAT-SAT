@@ -79,7 +79,7 @@ export default function Stats() {
           <LinearGradient colors={['#1A1A1A', '#3F3B33']} style={StyleSheet.absoluteFill as any} />
           <View style={styles.pointsHead}>
             <View>
-              <Text style={styles.pointsLabel}>AATHMAN POINTS</Text>
+              <Text style={styles.pointsLabel}>MY POINTS</Text>
               <Text style={styles.pointsValue}>{stats.points}</Text>
             </View>
             <View style={styles.pointsBadge}><Ionicons name="sparkles" size={16} color={colors.brand} /><Text style={styles.pointsBadgeText}>Level {Math.floor(stats.points / 500) + 1}</Text></View>

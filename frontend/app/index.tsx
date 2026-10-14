@@ -34,7 +34,7 @@ export default function Splash() {
             contentFit="cover"
           />
         </View>
-        <Text style={styles.title}>AATHMAN</Text>
+        <Text style={styles.title}>I TAT SAT</Text>
         <Text style={styles.subtitle}>Awaken Within</Text>
         <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.brand} />
       </View>

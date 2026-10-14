@@ -37,15 +37,11 @@ export default function Cart() {
       const create = await api.post('/orders/create', {
         items: items.map(i => ({ book_id: i.book_id, quantity: i.quantity })),
         address,
-        payment_method: 'razorpay',
+        payment_method: 'cod',
       });
-      // MOCK payment success (real Razorpay requires native SDK). Backend accepts empty verify.
-      const verify = await api.post('/orders/verify', { order_id: create.order.id });
-      if (verify.ok) {
-        await clearCart();
-        setItems([]);
-        setOrderDone(create.order);
-      }
+      await clearCart();
+      setItems([]);
+      setOrderDone(create.order);
     } finally { setCheckingOut(false); }
   };
 
@@ -104,9 +100,9 @@ export default function Cart() {
             </View>
           </View>
           <Pressable testID="pay-btn" onPress={checkout} disabled={checkingOut || !address.trim()} style={[styles.payBtn, (checkingOut || !address.trim()) && { opacity: 0.5 }]}>
-            {checkingOut ? <ActivityIndicator color="#fff" /> : <Text style={styles.payText}>Pay ₹{total} via Razorpay</Text>}
+            {checkingOut ? <ActivityIndicator color="#fff" /> : <Text style={styles.payText}>Place Order · Cash on Delivery ₹{total}</Text>}
           </Pressable>
-          <Text style={styles.note}>Payments are secured. Razorpay integration is mocked in this preview.</Text>
+          <Text style={styles.note}>Pay in cash when your order is delivered.</Text>
         </ScrollView>
       )}
 
@@ -116,7 +112,7 @@ export default function Cart() {
             <View style={styles.doneCircle}><Ionicons name="checkmark" size={40} color="#fff" /></View>
             <Text style={styles.doneTitle}>Order Placed!</Text>
             <Text style={styles.doneBody}>Order ID: {orderDone?.id?.slice(0, 8).toUpperCase()}</Text>
-            <Text style={styles.doneBody}>Total: ₹{orderDone?.amount}</Text>
+            <Text style={styles.doneBody}>Pay ₹{orderDone?.amount} in cash on delivery</Text>
             <Pressable testID="continue-shopping" onPress={() => { setOrderDone(null); router.replace('/(tabs)'); }} style={styles.homeBtn}>
               <Text style={styles.homeText}>Continue</Text>
             </Pressable>

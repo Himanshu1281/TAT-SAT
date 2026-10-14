@@ -38,6 +38,9 @@ SENDGRID_FROM_EMAIL = os.environ.get('SENDGRID_FROM_EMAIL', 'noreply@aathman.app
 SENDGRID_FROM_NAME = os.environ.get('SENDGRID_FROM_NAME', 'Aathman')
 OTP_DEV_MODE = os.environ.get('OTP_DEV_MODE', 'true').lower() == 'true'
 
+# Fixed-OTP login for the Google Play reviewer (App content -> App access). Only this one address bypasses email.
+REVIEW_LOGIN_EMAIL = os.environ.get('REVIEW_LOGIN_EMAIL', 'reviewer@itatsat.com').strip().lower()
+REVIEW_LOGIN_OTP = os.environ.get('REVIEW_LOGIN_OTP', '246810')
 RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', '')
 RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', '')
 
@@ -194,7 +197,8 @@ async def send_otp(body: SendOtpBody):
     identifier = body.identifier.strip().lower()
     if not identifier:
         raise HTTPException(400, "identifier required")
-    otp = "".join(random.choices(string.digits, k=6))
+    is_review = bool(REVIEW_LOGIN_EMAIL) and identifier == REVIEW_LOGIN_EMAIL
+    otp = REVIEW_LOGIN_OTP if is_review else "".join(random.choices(string.digits, k=6))
     doc = {
         "id": new_id(),
         "identifier": identifier,
@@ -208,10 +212,12 @@ async def send_otp(body: SendOtpBody):
     await db.otps.update_many({"identifier": identifier, "used": False}, {"$set": {"used": True}})
     await db.otps.insert_one(doc)
     sent = False
-    if body.method == "email":
+    if is_review:
+        sent = True  # reviewer already knows the fixed OTP; never email or echo it
+    elif body.method == "email":
         sent = send_otp_email(identifier, otp)
     resp = {"ok": True, "sent": sent, "method": body.method}
-    if OTP_DEV_MODE or not sent:
+    if not is_review and (OTP_DEV_MODE or not sent):
         resp["dev_otp"] = otp  # visible for dev/testing
     return resp
 
@@ -852,7 +858,8 @@ async def create_order(body: CheckoutBody, user: dict = Depends(get_current_user
         "address": body.address,
         "payment_method": body.payment_method,
         "razorpay_order_id": razorpay_order_id,
-        "status": "pending",
+        # COD orders are confirmed immediately and paid on delivery
+        "status": "cod_confirmed" if body.payment_method == "cod" else "pending",
         "created_at": now_utc(),
     }
     await db.orders.insert_one(doc.copy())
@@ -880,14 +887,25 @@ async def verify_order(body: VerifyPaymentBody, user: dict = Depends(get_current
             verified = hmac.compare_digest(expected, body.razorpay_signature)
         except Exception:
             verified = False
-    else:
-        # MOCKED payment success
-        verified = True
+    if order.get("payment_method") == "cod":
+        return {"ok": True, "status": order.get("status")}
     await db.orders.update_one(
         {"id": body.order_id},
         {"$set": {"status": "paid" if verified else "failed", "paid_at": now_utc(), "razorpay_payment_id": body.razorpay_payment_id}},
     )
     return {"ok": verified, "status": "paid" if verified else "failed"}
+
+
+@api.delete("/account")
+async def delete_account(user: dict = Depends(get_current_user)):
+    """Permanently delete the signed-in user's account and personal data (Google Play requirement)."""
+    uid = user["id"]
+    for coll in (db.diary, db.moods, db.sessions, db.mantras, db.live_attend, db.orders, db.qa):
+        await coll.delete_many({"user_id": uid})
+    if user.get("identifier"):
+        await db.otps.delete_many({"identifier": user["identifier"]})
+    await db.users.delete_one({"id": uid})
+    return {"ok": True}
 
 
 @api.get("/orders")

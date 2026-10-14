@@ -243,21 +243,21 @@ class TestBooksAndOrders:
         payload = {
             "items": [{"book_id": book_id, "quantity": 2}],
             "address": "TEST address, Bengaluru",
-            "payment_method": "razorpay",
+            "payment_method": "cod",
         }
         r = api_client.post(f"{base_url}/api/orders/create", json=payload, headers=auth_headers)
         assert r.status_code == 200
-        data = r.json()
-        assert data["mock_mode"] is True
-        order = data["order"]
-        assert order["status"] == "pending"
+        order = r.json()["order"]
+        assert order["status"] == "cod_confirmed"
         assert order["amount"] == books[0]["price"] * 2
 
+        # An unsigned Razorpay verify must never mark an order paid
+        payload["payment_method"] = "razorpay"
+        rp = api_client.post(f"{base_url}/api/orders/create", json=payload, headers=auth_headers).json()["order"]
         r2 = api_client.post(f"{base_url}/api/orders/verify",
-                             json={"order_id": order["id"]}, headers=auth_headers)
+                             json={"order_id": rp["id"]}, headers=auth_headers)
         assert r2.status_code == 200
-        v = r2.json()
-        assert v["ok"] is True and v["status"] == "paid"
+        assert r2.json()["ok"] is False
 
 
 # ----------------- Guru content -----------------

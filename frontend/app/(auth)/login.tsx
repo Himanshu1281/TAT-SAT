@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -60,7 +60,7 @@ export default function Login() {
 
           {error ? <Text style={styles.error} testID="login-error">{error}</Text> : null}
 
-          <Text style={styles.tos}>By continuing, you agree to Aathman&apos;s Terms &amp; Privacy Policy.</Text>
+          <Text style={styles.tos}>By continuing, you agree to I Tat Sat&apos;s Terms &amp; <Text testID="privacy-link" style={{ textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://itatsat.com/#privacy')}>Privacy Policy</Text>.</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

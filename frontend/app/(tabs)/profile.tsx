@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Alert, Platform, Linking } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,30 @@ export default function ProfileTab() {
     try { setStats(await api.get('/stats/me')); } catch {}
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const deleteAccount = () => {
+    const doDelete = async () => {
+      try {
+        await api.del('/account');
+        await logout();
+      } catch (e: any) {
+        const msg = e?.message || 'Could not delete account. Please try again.';
+        if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Error', msg);
+      }
+    };
+    const title = 'Delete account?';
+    const body = 'This permanently deletes your account, profile, journal, mood check-ins, practice history, questions and orders. This cannot be undone.';
+    if (Platform.OS === 'web') {
+      if (window.confirm(`${title}
+
+${body}`)) doDelete();
+      return;
+    }
+    Alert.alert(title, body, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: doDelete },
+    ]);
+  };
 
   const initials = (user?.name || 'A').split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
 
@@ -57,11 +81,16 @@ export default function ProfileTab() {
           <MenuItem icon="book-outline" label="Books & Magazines" onPress={() => router.push('/books')} testID="menu-books" />
           <MenuItem icon="chatbubble-ellipses-outline" label="Q & A" onPress={() => router.push('/qa')} testID="menu-qa" />
           <MenuItem icon="sparkles-outline" label="Message from Guruji" onPress={() => router.push('/guru-messages')} testID="menu-guru" />
+          <MenuItem icon="shield-checkmark-outline" label="Privacy Policy" onPress={() => Linking.openURL('https://itatsat.com/#privacy')} testID="menu-privacy" />
         </View>
 
         <Pressable testID="logout-btn" onPress={logout} style={styles.logoutBtn}>
           <Ionicons name="log-out-outline" size={18} color={colors.error} />
           <Text style={styles.logoutText}>Sign out</Text>
+        </Pressable>
+
+        <Pressable testID="delete-account-btn" onPress={deleteAccount} style={styles.deleteBtn}>
+          <Text style={styles.deleteText}>Delete account</Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -107,4 +136,6 @@ const styles = StyleSheet.create({
   menuText: { flex: 1, fontSize: 14, color: colors.onSurface, fontWeight: '600' },
   logoutBtn: { flexDirection: 'row', gap: 8, alignItems: 'center', alignSelf: 'center', marginTop: spacing.xl, paddingHorizontal: spacing.lg, height: 44, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.error },
   logoutText: { color: colors.error, fontWeight: '700' },
+  deleteBtn: { alignSelf: 'center', marginTop: spacing.md, padding: spacing.sm },
+  deleteText: { color: colors.muted, fontSize: 13, textDecorationLine: 'underline' },
 });
