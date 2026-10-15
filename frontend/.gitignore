@@ -38,3 +38,8 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
+
+# Local-only: native project from expo prebuild/run (app.json is the source of truth) and local lockfile
+/android/
+/ios/
+yarn.lock
