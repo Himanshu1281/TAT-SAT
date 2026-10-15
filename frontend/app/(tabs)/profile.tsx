@@ -21,7 +21,8 @@ export default function ProfileTab() {
   // Leave the tabs after signing out so their screens stop calling authenticated APIs
   const signOut = async () => {
     await logout();
-    router.replace('/');
+    // Explicit path: '/' is ambiguous here and resolves to the Home tab, not the splash screen
+    router.replace('/(auth)/login');
   };
 
   const deleteAccount = () => {

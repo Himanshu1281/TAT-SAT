@@ -31,7 +31,7 @@ export default function Login() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']} testID="login-screen">
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-        <Pressable style={styles.back} onPress={() => router.back()} testID="login-back-btn">
+        <Pressable style={styles.back} onPress={() => (router.canGoBack() ? router.back() : router.replace('/onboarding'))} testID="login-back-btn">
           <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
         </Pressable>
         <View style={styles.body}>
