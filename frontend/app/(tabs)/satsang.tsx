@@ -39,14 +39,19 @@ export default function SatsangTab() {
 
   useEffect(() => { load(kind); }, [kind, load]);
 
+  const liveNow = !!current?.is_live_now;
+
   const openLive = async (s: any) => {
-    try { await api.post('/live/attend', { session_id: s.id }); } catch {}
+    if (liveNow) {
+      try { await api.post('/live/attend', { session_id: s.id }); } catch {}
+    }
     router.push({
       pathname: '/live-player',
       params: {
         title: s.title,
         channel: s.youtube_channel_id || channel?.channel_id,
         ytid: current?.video_id || s.youtube_id || '',
+        live: liveNow ? '1' : '0',
       },
     });
   };
@@ -90,7 +95,7 @@ export default function SatsangTab() {
             </View>
             <Pressable
               testID="watch-live-btn"
-              onPress={() => channel?.channel_id && router.push({ pathname: '/live-player', params: { channel: channel.channel_id, ytid: current?.video_id || '', title: current?.title || 'Aathman Live' } })}
+              onPress={() => channel?.channel_id && router.push({ pathname: '/live-player', params: { channel: channel.channel_id, ytid: current?.video_id || '', title: current?.title || 'Aathman Live', live: liveNow ? '1' : '0' } })}
               style={styles.channelBtn}
             >
               <Ionicons name="play" size={14} color={colors.onBrand} />
@@ -103,7 +108,7 @@ export default function SatsangTab() {
               <View style={styles.imgWrap}>
                 <Image source={{ uri: s.cover }} style={StyleSheet.absoluteFill as any} contentFit="cover" />
                 <LinearGradient colors={['transparent', 'rgba(16,24,40,0.85)']} style={StyleSheet.absoluteFill as any} />
-                {s.is_live ? (
+                {liveNow ? (
                   <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>LIVE</Text></View>
                 ) : null}
                 <View style={styles.imgBody}>
@@ -121,7 +126,7 @@ export default function SatsangTab() {
                 </View>
                 <Pressable testID={`join-${s.id}`} style={styles.joinBtn} onPress={() => openLive(s)}>
                   <Ionicons name="play" size={14} color={colors.onBrand} />
-                  <Text style={styles.joinText}>{s.is_live ? 'Join Live' : 'Watch'}</Text>
+                  <Text style={styles.joinText}>{liveNow ? 'Join Live' : 'Watch'}</Text>
                 </Pressable>
               </View>
             </View>

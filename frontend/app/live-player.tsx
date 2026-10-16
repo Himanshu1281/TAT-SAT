@@ -10,35 +10,39 @@ import { colors, spacing, radius } from '@/src/theme';
 type Mode = 'both' | 'video' | 'chat';
 
 export default function LivePlayer() {
-  const { ytid, channel, title } = useLocalSearchParams<{ ytid?: string; channel?: string; title?: string }>();
+  const { ytid, channel, title, live } = useLocalSearchParams<{ ytid?: string; channel?: string; title?: string; live?: string }>();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('both');
   const [videoId, setVideoId] = useState<string | null>(ytid ? String(ytid) : null);
-  const [isLiveNow, setIsLiveNow] = useState<boolean | null>(null);
-  const [resolving, setResolving] = useState(!ytid && !!channel);
+  const [isLiveNow, setIsLiveNow] = useState<boolean | null>(live === '1' ? true : live === '0' ? false : null);
+  const [resolving, setResolving] = useState(!!channel && (!ytid || live == null));
 
-  // If we only have a channel_id, resolve the current live video (needed for chat).
+  // Resolve live status / current video when the caller didn't supply them.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (videoId || !channel) return;
+      if (!channel || (videoId && isLiveNow !== null)) return;
       try {
         const data = await api.get('/live/aathman-current');
         if (cancelled) return;
-        if (data?.video_id) setVideoId(data.video_id);
+        if (!videoId && data?.video_id) setVideoId(data.video_id);
         setIsLiveNow(!!data?.is_live_now);
-      } catch {}
+      } catch { if (!cancelled) setIsLiveNow(false); }
       finally { if (!cancelled) setResolving(false); }
     })();
     return () => { cancelled = true; };
-  }, [channel, videoId]);
+  }, [channel, videoId, isLiveNow]);
 
-  const videoSrc = channel
+  // Live: the channel's live_stream embed. Otherwise: play the latest stream directly,
+  // since live_stream shows an "offline" screen when nothing is broadcasting.
+  const videoSrc = isLiveNow && channel
     ? `https://www.youtube.com/embed/live_stream?channel=${channel}&autoplay=1&mute=1&playsinline=1&rel=0`
-    : `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&playsinline=1&rel=0`;
+    : videoId
+      ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&playsinline=1&rel=0`
+      : null;
 
-  // YouTube's live chat popout: works standalone (no embed_domain needed).
-  const chatSrc = videoId ? `https://www.youtube.com/live_chat?v=${videoId}&is_popout=1` : null;
+  // YouTube's live chat popout — only meaningful while the stream is live.
+  const chatSrc = isLiveNow && videoId ? `https://www.youtube.com/live_chat?v=${videoId}&is_popout=1` : null;
 
   const openOnYouTube = () => {
     const url = videoId
@@ -54,7 +58,7 @@ export default function LivePlayer() {
   const width = Dimensions.get('window').width;
   const videoH = Math.min(Math.round((width * 9) / 16), Math.round(screenH * 0.45));
 
-  const showVideo = mode !== 'chat';
+  const showVideo = mode !== 'chat' && !!videoSrc;
   const showChat = mode !== 'video' && !!chatSrc;
 
   return (
@@ -100,7 +104,7 @@ export default function LivePlayer() {
         </View>
 
         {/* Video */}
-        {showVideo ? (
+        {showVideo && videoSrc ? (
           <View style={[styles.videoBox, mode === 'both' ? { height: videoH } : { flex: 1 }]}>
             {Platform.OS === 'web' ? (
               // @ts-ignore
@@ -147,7 +151,7 @@ export default function LivePlayer() {
 
         {!showVideo && !showChat ? (
           <View style={styles.emptyChat}>
-            {resolving ? <ActivityIndicator color={colors.brand} /> : <Text style={styles.emptyText}>Chat is available once Guruji is live.</Text>}
+            {resolving ? <ActivityIndicator color={colors.brand} /> : <Text style={styles.emptyText}>{videoSrc ? 'Chat is available once Guruji is live.' : 'No stream available right now.'}</Text>}
           </View>
         ) : null}
       </SafeAreaView>

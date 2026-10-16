@@ -685,9 +685,20 @@ async def live_sessions(kind: Optional[str] = None):
     if kind:
         q["kind"] = kind
     rows = await db.live_sessions.find(q, {"_id": 0}).sort("start_at", 1).to_list(50)
+    # The stored is_live flag is seed data; real status comes from the channel scrape.
+    live_now = (await _scrape_aathman_live()).get("is_live_now", False)
+    now = now_utc()
     for r in rows:
-        if isinstance(r.get("start_at"), datetime):
-            r["start_at"] = iso(r["start_at"])
+        start = r.get("start_at")
+        if isinstance(start, datetime):
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=timezone.utc)
+            # Sessions are weekly: roll past dates forward to the next occurrence.
+            if start < now:
+                start += timedelta(weeks=((now - start) // timedelta(weeks=1)) + 1)
+            r["start_at"] = iso(start)
+        r["is_live"] = bool(live_now and r.get("youtube_channel_id") == AATHMAN_YOUTUBE_CHANNEL_ID)
+    rows.sort(key=lambda r: r.get("start_at") or "")
     return rows
 
 
@@ -796,6 +807,10 @@ async def live_attend(body: LiveAttendBody, user: dict = Depends(get_current_use
     session = await db.live_sessions.find_one({"id": body.session_id}, {"_id": 0})
     if not session:
         raise HTTPException(404, "Session not found")
+    # Only award attendance while the stream is actually broadcasting.
+    if not (await _scrape_aathman_live()).get("is_live_now"):
+        pts = await _compute_points(user["id"])
+        return {"ok": False, "not_live": True, "points": pts["total"]}
     doc = {
         "id": new_id(),
         "user_id": user["id"],
