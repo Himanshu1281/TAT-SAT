@@ -43,3 +43,6 @@ app-example
 /android/
 /ios/
 yarn.lock
+
+# Expo autolinking output (machine-specific)
+autolink.json
