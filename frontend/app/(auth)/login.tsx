@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,9 +8,16 @@ import { colors, spacing, radius, fonts } from '@/src/theme';
 
 export default function Login() {
   const router = useRouter();
-  const { signInWithGoogle } = useAuth();
+  const { user, signInWithGoogle } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // On some Android devices the Google redirect arrives via the deep-link listener
+  // instead of the auth-session result, so leave this screen once a user is set.
+  useEffect(() => {
+    if (!user) return;
+    router.replace(user.onboarded ? '/(tabs)' : '/(auth)/profile-setup');
+  }, [user, router]);
 
   const onGoogle = async () => {
     setError(null);
@@ -18,9 +25,8 @@ export default function Login() {
     try {
       const res = await signInWithGoogle();
       // On web, redirect happens via window.location — nothing else to do here.
+      // Navigation happens in the effect above once the user is set.
       if (!res) return;
-      if (res.is_new) router.replace('/(auth)/profile-setup');
-      else router.replace('/(tabs)');
     } catch (e: any) {
       setError(e?.message || 'Google sign-in failed. Please try again.');
     } finally {
