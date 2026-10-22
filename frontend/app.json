@@ -2,7 +2,7 @@
   "expo": {
     "name": "I Tat Sat",
     "slug": "frontend",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "frontend",
@@ -20,7 +20,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.itatsat.app",
-      "versionCode": 108
+      "versionCode": 109
     },
     "web": {
       "bundler": "metro",

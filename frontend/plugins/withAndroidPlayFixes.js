@@ -3,7 +3,13 @@
 //   push; it never schedules local notifications that need restoring after reboot).
 // - Drop expo-audio's microphone foreground service and RECORD_AUDIO (no recording).
 // - Drop the deprecated android:statusBarColor theme item (edge-to-edge, Android 15).
-const { withAndroidManifest, withAndroidStyles } = require('expo/config-plugins');
+// - Turn on R8 shrinking/obfuscation for release builds.
+const { withAndroidManifest, withAndroidStyles, withGradleProperties } = require('expo/config-plugins');
+
+const GRADLE_PROPS = {
+  'android.enableMinifyInReleaseBuilds': 'true',
+  'android.enableShrinkResourcesInReleaseBuilds': 'true',
+};
 
 const NOTIF_RECEIVER = 'expo.modules.notifications.service.NotificationsService';
 const RECORDING_SERVICE = 'expo.modules.audio.service.AudioRecordingService';
@@ -42,6 +48,13 @@ module.exports = function withAndroidPlayFixes(config) {
   config = withAndroidStyles(config, (cfg) => {
     for (const style of cfg.modResults.resources.style || []) {
       if (style.item) style.item = style.item.filter((i) => i.$.name !== 'android:statusBarColor');
+    }
+    return cfg;
+  });
+  config = withGradleProperties(config, (cfg) => {
+    for (const [key, value] of Object.entries(GRADLE_PROPS)) {
+      cfg.modResults = cfg.modResults.filter((p) => !(p.type === 'property' && p.key === key));
+      cfg.modResults.push({ type: 'property', key, value });
     }
     return cfg;
   });
