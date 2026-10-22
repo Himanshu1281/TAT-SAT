@@ -2,7 +2,7 @@
   "expo": {
     "name": "I Tat Sat",
     "slug": "frontend",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "frontend",
@@ -16,11 +16,11 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#E47001"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.itatsat.app",
-      "versionCode": 106
+      "versionCode": 107
     },
     "web": {
       "bundler": "metro",
@@ -35,7 +35,7 @@
           "image": "./assets/images/splash-image.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000000"
+          "backgroundColor": "#E47001"
         }
       ],
       "expo-audio",
